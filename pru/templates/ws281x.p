@@ -116,6 +116,82 @@ l:
 .endm
 
 
+
+.macro SEND_PULSE_TO_GPIO_BANKAB
+	.mparam gpio_addrA,mask_constA,gpio_addrB,mask_constB
+	MOV r_gpio0_addr, gpio_addrA | GPIO_CLEARDATAOUT; 
+	MOV r_gpio1_addr, gpio_addrB | GPIO_CLEARDATAOUT; 
+
+	// We can overwrite the data regs now just for testing since this is a hard coded waveform
+	MOV r_data0, mask_constA; 
+	MOV r_data1, mask_constB; 
+
+	SBBO r_data0 , r_gpio0_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+	SBBO r_data1 , r_gpio1_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
+
+	PAUSE_NS 250;
+
+	MOV r_data0, 0x08; 
+	MOV r_data1, 0x08; 
+
+	SBBO r_data0 , r_gpio0_addr , 0 , 4;			
+	SBBO r_data1 , r_gpio1_addr , 0 , 4;	
+
+	PAUSE_NS 350;
+		
+	MOV r_data0, mask_constA; 
+	MOV r_data1, mask_constB; 
+
+	SBBO r_data0 , r_gpio0_addr , 0 , 4;			
+	SBBO r_data1 , r_gpio1_addr , 0 , 4;			
+
+	PAUSE_NS 200;
+
+
+.endm
+
+// You think you could make this look nice by breaking it into lines, but you can not with this ASM 
+
+/*
+
+.macro SEND_PULSE_TO_GPIO_BANKABCD
+	.mparam gpio_addrA,mask_constA,zeros_regA , gpio_addrB,mask_constB,zeros_regB,	gpio_addrC,mask_constC,zeros_regC, gpio_addrD,mask_constD,zeros_regD
+
+
+	MOV r_gpio0_addr, gpio_addrA | GPIO_CLEARDATAOUT; 
+	MOV r_gpio1_addr, gpio_addrB | GPIO_CLEARDATAOUT; 
+	MOV r_gpio2_addr, gpio_addrC | GPIO_CLEARDATAOUT; 
+	MOV r_gpio3_addr, gpio_addrD | GPIO_CLEARDATAOUT; 
+
+	// We can overwrite the data regs now just for testing since this is a hard coded waveform
+	MOV r_data0, mask_constA; 
+	MOV r_data1, mask_constB; 
+	MOV r_data2, mask_constC; 
+	MOV r_data3, mask_constD; 
+
+	SBBO zeros_regA , r_gpio0_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+	SBBO zeros_regB , r_gpio1_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
+	SBBO zeros_regC , r_gpio2_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+	SBBO zeros_regD , r_gpio3_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
+
+	PAUSE_NS 250;
+
+	SBBO r_data0 , r_gpio0_addr , 0 , 4;			
+	SBBO r_data1 , r_gpio1_addr , 0 , 4;	
+	SBBO r_data2 , r_gpio2_addr , 0 , 4;			
+	SBBO r_data3 , r_gpio3_addr , 0 , 4;	
+
+	PAUSE_NS 250;
+		
+	SBBO r_data0 , r_gpio0_addr , 0 , 4;			
+	SBBO r_data1 , r_gpio1_addr , 0 , 4;			
+
+	PAUSE_NS 450;
+
+.endm
+
+*/
+
 /*
 
 #define SEND_LED_BIT_ARRAY_TO_GPIO_BANK(gpio_addr,mask_const,zerobits_reg) 					\
@@ -297,6 +373,10 @@ l_word_loop:
 
 		// OK, now all the gpio_zeros have a 1 for each GPIO bit that should be set to 0 in the middle of this signal
 
+		MOV r_gpio0_zeros , 0xffffffff
+		MOV r_gpio1_zeros , 0x00000000
+		MOV r_gpio2_zeros , 0x00 | 1<<25
+		MOV r_gpio3_zeros , 0x00000000
 
 loopy:
 
@@ -304,7 +384,49 @@ loopy:
 
 		//SEND_PULSE_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask
 		//SEND_PULSE_TO_GPIO_BANK GPIO1, pru0_gpio1_all_mask
-		SEND_PULSE_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask
+		//SEND_PULSE_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask
+
+		// SBBO can take a fixed offer to tbe address, so we load our addresses regisrters
+		// with the address of the lower address (the CLEAR) and then offet from that to get the 
+		// higher one (the SET)
+
+		MOV r_gpio0_addr, GPIO0 | GPIO_CLEARDATAOUT; 
+		MOV r_gpio1_addr, GPIO1 | GPIO_CLEARDATAOUT; 
+		MOV r_gpio2_addr, GPIO2 | GPIO_CLEARDATAOUT; 
+		MOV r_gpio3_addr, GPIO3 | GPIO_CLEARDATAOUT; 
+
+		// We can overwrite the data regs now just for testing since this is a hard coded waveform
+		MOV r_data0, pru0_gpio0_all_mask; 
+		MOV r_data1, pru0_gpio1_all_mask; 
+		MOV r_data2, pru0_gpio2_all_mask; 
+		MOV r_data3, pru0_gpio3_all_mask; 
+
+		// SET all masked outputs high 
+		// Both zero and one data bit waveforms start with pin going high 
+		SBBO r_data0 , r_gpio0_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+		SBBO r_data1 , r_gpio1_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
+		SBBO r_data2 , r_gpio2_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+		SBBO r_data3 , r_gpio3_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
+
+		PAUSE_NS 250;
+
+		// CLEAR any output that has bit set in zeros
+		// These will make this output waveform go low, making it into a short zero pulse
+		SBBO r_gpio0_zeros , r_gpio0_addr , 0 , 4;			
+		SBBO r_gpio1_zeros , r_gpio1_addr , 0 , 4;	
+		SBBO r_gpio2_zeros , r_gpio2_addr , 0 , 4;			
+		SBBO r_gpio3_zeros , r_gpio3_addr , 0 , 4;	
+
+		PAUSE_NS 250;
+		
+		// CLEAR all masked outputs high 
+		// Both zero and one data bit waveforms end with pin going low
+		SBBO r_data0 , r_gpio0_addr , 0 , 4;			
+		SBBO r_data1 , r_gpio1_addr , 0 , 4;	
+		SBBO r_data2 , r_gpio2_addr , 0 , 4;			
+		SBBO r_data3 , r_gpio3_addr , 0 , 4;	
+
+		PAUSE_NS 450;
 
 
 /*
