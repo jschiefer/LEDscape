@@ -15,7 +15,6 @@ var Commands = {
         pinTable_1.printPinTable("GPIO: BANK_BIT", function (pin) { return pin.gpioNum ? pin.gpioName : ""; });
         pinTable_1.printPinTable("GPIO: Global Number", function (pin) { return pin.gpioNum || ""; });
         pinTable_1.printPinTable("Mapped Channel Index", function (pin) { return pin.mappedChannelIndex != undefined ? pin.mappedChannelIndex : ""; });
-        pinTable_1.printPinTable("HDMI / eMMC Conflicts", function (pin) { return pin.mappedChannelIndex != undefined ? (pin.mappedChannelIndex + (pin.bbbHdmiPin ? "H" : "") + (pin.emmcPin ? "E" : "")) : ""; });
         pinTable_1.printPinTable("Unused Channels", function (pin) { return (pin.mappedChannelIndex == undefined && pin.gpioNum != undefined) ? pin.gpioName : ""; });
         console.info("PRU0 Pins: " + bbbPinData_1.pinIndex.pinData.filter(function (d) { return d.r30pru == 0; }).length);
         console.info("PRU1 Pins: " + bbbPinData_1.pinIndex.pinData.filter(function (d) { return d.r30pru == 1; }).length);
@@ -88,11 +87,11 @@ var Commands = {
                 setupScript += "\nfor CAPEMGR in " + capemgrDirectories.join(" ") + "; do\n\tif [ -d \"$CAPEMGR\" ]; then\n\t\tif [ -e \"" + dtboSourceFilename + "\" ]; then\n\t\t\tif [ -e \"" + dtboDestFilename + "\" ]; then\n\t\t\t\techo Overlay dtbo already exists: " + dtboDestFilename + "\n\t\t\telif cp \"" + dtboSourceFilename + "\" \"" + dtboDestFilename + "\"; then\n\t\t\t\techo Copied overlay dtbo " + dtboSourceFilename + " to " + dtboDestFilename + "\n\t\t\telse\n\t\t\t\techo ERROR: Failed to copy overlay dtbo from " + dtboSourceFilename + " to " + dtboDestFilename + "\n\t\t\t\texit -1\n\t\t\tfi\n\t\t\t\n\t\t\techo Mapping LEDscape pins using overlay...\n\t\t\tenableOverlay " + pinMapping.dtbName + "\n\t\tfi\n\t\texit 0\n\tfi\ndone\n\necho ERROR: Failed to find a bone_capemgr in /sys/\nexit -1\n\t\t\t\t\t";
             }
             else {
-                setupScript += "if [ -d /sys/class/gpio ]; then\n";
+                setupScript += "if [ -d /sys/class/gpio ]; then";
                 usedPins.forEach(function (pin) {
-                    setupScript += "    echo 'Setting up channel " + pin.mappedChannelIndex + " (pin " + pin.headerName + ")'\n";
+                    setupScript += "    echo Setting up channel " + pin.mappedChannelIndex + " (pin " + pin.headerName + ")\n";
                     setupScript += "    echo " + pin.gpioNum + " >> /sys/class/gpio/export\n";
-                    setupScript += "    echo out >> /sys/class/gpio/gpio" + pin.gpioNum + "/direction\n";
+                    setupScript += "    echo out >> /sys/class/gpio/gpio/" + pin.gpioNum + "/direction\n";
                     setupScript += "    echo 0 >> /sys/class/gpio/gpio" + pin.gpioNum + "/value\n";
                 });
                 setupScript += "\n\t\t\t\telse\n\t\t\t\t\techo ERROR: No /sys/class/gpio found.\n\t\t\t\t\texit -1\n\t\t\t\tfi\n\t\t\t\t";

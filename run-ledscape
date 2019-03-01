@@ -2,8 +2,21 @@
 DIRNAME="`dirname "$0"`"
 cd "$DIRNAME"
 
+# Wait until eth0 is either initialized or failed to initialize
+while ! dmesg | grep 'net eth0: phy found';
+    do echo 'Waiting for eth0...'
+    sleep 1
+
+    # Check if it's failed, if so, hard reset via GPIO60
+    if dmesg | egrep -i 'mdio:03 not found'; then
+        echo 'eth0 failed to initialize, hard resetting...'
+        echo 60 > /sys/class/gpio/export
+        echo out > /sys/class/gpio/gpio60/direction
+    fi
+done
+
 #./opc-server --config configs/ws281x-24-config.json
 #./opc-server --config configs/ws281x-48-config.json
 #./opc-server --config configs/apa102-48-config.json
 #./opc-server --config configs/ws281x-rj45-config.json
-./opc-server --config configs/ocf-seahorse.json
+./opc-server --config configs/tedx-orb-config.json
