@@ -1,0 +1,121 @@
+/*
+ * This overlay routes the 22 available PRU-accessible GPIO ports, except P8_20 and P8_21, which are used by the eMMC.
+ * Compile with: dtc -O dtb -o BB-LEDSCAPE-PRU22-00A0.dtbo -b 0 -@ BB-LEDSCAPE-PRU22.dts
+ * Copy to lib with: sudo cp BB-LEDSCAPE-PRU22-00A0.dtbo /lib/firmware/
+ */
+
+/dts-v1/;
+/plugin/;
+
+/{
+    compatible = "ti,beaglebone", "ti,beaglebone-black";
+    part_number = "BB-LEDSCAPE-PRU22";
+
+    exclusive-use =
+        "P9.31",
+        "P9.29",
+        "P9.30",
+        "P9.28",
+        "P9.42",
+        "P9.27",
+        "P9.41",
+        "P9.25",
+        "P8.12",
+        "P8.11",
+        "P8.45",
+        "P8.46",
+        "P8.43",
+        "P8.44",
+        "P8.41",
+        "P8.42",
+        "P8.39",
+        "P8.40",
+        "P8.27",
+        "P8.29",
+        "P8.28";
+
+    fragment@0 {
+        target = <&am33xx_pinmux>;
+        __overlay__ {
+            bs_pinmode_P8_28_0xd: pinmux_bs_pinmode_P8_28_0xd {
+                pinctrl-single,pins = <
+                    0x190 0xd
+                    0x194 0xd
+                    0x198 0xd
+                    0x19C 0xd
+                    0x1A0 0xd
+                    0x1A4 0xd
+                    0x1A8 0xd
+                    0x1AC 0xd
+                    0x030 0xe
+                    0x034 0xe
+                    0x0A0 0xd
+                    0x0A4 0xd
+                    0x0A8 0xd
+                    0x0AC 0xd
+                    0x0B0 0xd
+                    0x0B4 0xd
+                    0x0B8 0xd
+                    0x0BC 0xd
+                    0x0E0 0xd
+                    0x0E4 0xd
+                    0x0E8 0xd
+                    0x0EC 0xd
+                >;
+            };
+        };
+    };
+
+    fragment@1 {
+        target = <&ocp>;
+        __overlay__ {
+            bs_pinmode_P8_28_0xd_pinmux {
+                compatible = "bone-pinmux-helper";
+                status = "okay";
+                pinctrl-names = "default";
+                pinctrl-0 = <&bs_pinmode_P8_28_0xd>;
+            };
+        };
+    };
+};
+
+
+/*
+Table from http://elinux.org/Ti_AM33XX_PRUSSv2#Beaglebone_PRU_connections_and_modes
+
+Used Outputs:
+0   0   Mode_5  0   Mode_6  P9_31   SPI1_SCLK   McASP   mcasp0_aclkx    990h     0x190
+0   1   Mode_5  1   Mode_6  P9_29   SPI1_D0     McASP   mcasp0_fsx      994h     0x194
+0   2   Mode_5  2   Mode_6  P9_30   SPI1_D1     McASP   mcasp0_axr0     998h     0x198
+0   3   Mode_5  3   Mode_6  P9_28   SPI1_CS0    McASP   mcasp0_ahclkr   99Ch     0x19C
+0   4   Mode_5  4   Mode_6  P9_42   (*note1)    McASP   mcasp0_aclkr    9A0h     0x1A0
+0   5   Mode_5  5   Mode_6  P9_27   GPIO3_19    McASP   mcasp0_fsr      9A4h     0x1A4
+0   6   Mode_5  6   Mode_6  P9_41   (*note2)            mcasp0_axr1     9A8h     0x1A8
+0   7   Mode_5  7   Mode_6  P9_25   GPIO3_21    McASP   mcasp0_ahclkx   9ACh     0x1AC
+
+0   14  Mode_6  N/A         P8_12   GPIO1_12            gpmc_ad12       830h     0x030
+0   15  Mode_6  N/A         P8_11   GPIO1_13            gpmc_ad13       834h     0x034
+
+1   0   Mode_5  0   Mode_6  P8_45   GPIO2_6     HDMI    lcd_data0       8A0h     0x0A0
+1   1   Mode_5  1   Mode_6  P8_46   GPIO2_7     HDMI    lcd_data1       8A4h     0x0A4
+1   2   Mode_5  2   Mode_6  P8_43   GPIO2_8     HDMI    lcd_data2       8A8h     0x0A8
+1   3   Mode_5  3   Mode_6  P8_44   GPIO2_9     HDMI    lcd_data3       8ACh     0x0AC
+1   4   Mode_5  4   Mode_6  P8_41   GPIO2_10    HDMI    lcd_data4       8B0h     0x0B0
+1   5   Mode_5  5   Mode_6  P8_42   GPIO2_11    HDMI    lcd_data5       8B4h     0x0B4
+1   6   Mode_5  6   Mode_6  P8_39   GPIO2_12    HDMI    lcd_data6       8B8h     0x0B8
+1   7   Mode_5  7   Mode_6  P8_40   GPIO2_13    HDMI    lcd_data7       8BCh     0x0BC
+1   8   Mode_5  8   Mode_6  P8_27   GPIO2_22    HDMI    lcd_vsync       8E0h     0x0E0
+1   9   Mode_5  9   Mode_6  P8_29   GPIO2_23    HDMI    lcd_hsync       8E4h     0x0E4
+1   10  Mode_5  10  Mode_6  P8_28   GPIO2_24    HDMI    lcd_pclk        8E8h     0x0E8
+1   11  Mode_5  11  Mode_6  P8_30   GPIO2_25    HDMI    lcd_ac_bias_en  8ECh     0x0EC
+
+For EMMC:
+1   12  Mode_5  12  Mode_6  P8_21   GPIO1_30    emmc2   gpmc_csn1       880h     0x080
+1   13  Mode_5  13  Mode_6  P8_20   GPIO1_31    emmc2   gpmc_csn2       884h     0x084
+
+Mode were 0x25 and 0x26
+
+dtc -O dtb -o /lib/firmware/BB-LAP-PRU24-V1-00A0.dtbo -b 0 -@ lap-pru24-v1.dts
+echo BB-LAP-PRU24-V1 > /sys/devices/platform/bone_capemgr/slots
+*/
+

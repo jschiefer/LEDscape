@@ -1,0 +1,19 @@
+{
+	"outputMode": "ws281x-r30",
+	"outputMapping": "lap-pru22-v1",
+	"demoMode": "fade",
+	"ledsPerStrip": 120,
+	"usedStripCount": 22,
+	"colorChannelOrder": "BRG",
+	"opcTcpPort": 7890,
+	"opcUdpPort": 7890,
+	"enableInterpolation": true,
+	"enableDithering": true,
+	"enableLookupTable": true,
+	"lumCurvePower": 2.0000,
+	"whitePoint": {
+		"red": 0.9000,
+		"green": 1.0000,
+		"blue": 1.0000
+	}
+}
