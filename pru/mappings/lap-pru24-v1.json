@@ -2,7 +2,7 @@
 	"id": "lap-pru24-v1",
 	"name": "Light at Play - 22 output cape",
 	"description": "Mapping for Light at Play - 22 output cape",
-	"r30cape": true,
+	"dtbName": "BB-LEDSCAPE22",
 
 	"mappedPinNumberToPinDesignator": {
 		 "0": "P9_31",
@@ -26,8 +26,8 @@
 		"18": "P8_27",
 		"19": "P8_29",
 		"20": "P8_28",
-		"21": "P8_30",
-		"22": "P8_21", // EMMC Conflict
-		"23": "P8_20"  // EMMC Conflict
+		"21": "P8_30"
+		//"22": "P8_21", // EMMC Conflict
+		//"23": "P8_20"  // EMMC Conflict
 	}
 }

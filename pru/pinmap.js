@@ -15,6 +15,7 @@ var Commands = {
         pinTable_1.printPinTable("GPIO: BANK_BIT", function (pin) { return pin.gpioNum ? pin.gpioName : ""; });
         pinTable_1.printPinTable("GPIO: Global Number", function (pin) { return pin.gpioNum || ""; });
         pinTable_1.printPinTable("Mapped Channel Index", function (pin) { return pin.mappedChannelIndex != undefined ? pin.mappedChannelIndex : ""; });
+        pinTable_1.printPinTable("HDMI / eMMC Conflicts", function (pin) { return pin.mappedChannelIndex != undefined ? (pin.mappedChannelIndex + (pin.bbbHdmiPin ? "H" : "") + (pin.emmcPin ? "E" : "")) : ""; });
         pinTable_1.printPinTable("Unused Channels", function (pin) { return (pin.mappedChannelIndex == undefined && pin.gpioNum != undefined) ? pin.gpioName : ""; });
         console.info("PRU0 Pins: " + bbbPinData_1.pinIndex.pinData.filter(function (d) { return d.r30pru == 0; }).length);
         console.info("PRU1 Pins: " + bbbPinData_1.pinIndex.pinData.filter(function (d) { return d.r30pru == 1; }).length);
@@ -52,7 +53,7 @@ var Commands = {
         function buildProgram(pruNum) {
             var asmGenerationResult = generatePruProgram(modeName, pruNum, channelCount);
             function pathOf(name) { return tempDir + "/" + name; }
-            var programName = modeName + "-" + mappingFilename.match(/.*?([^\/\.]+)(\..+)?/)[1] + "-pru" + pruNum;
+            var programName = modeName + "-" + mappingFilename.match(/.*?([^\/\.]+)(\..+)?/)[1] + "-pru" + pruNum + "-" + channelCount + "ch";
             var asmCodeHash = XXH(asmGenerationResult.pruCode, 0x243F6A88).toString(16);
             var asmFileName = programName + ".p";
             var binFileName = programName + ".bin";
@@ -73,39 +74,32 @@ var Commands = {
         var pru0Result = buildProgram(0);
         var pru1Result = buildProgram(1);
         var usedPins = pru0Result.usedPins.concat(pru1Result.usedPins);
-        if (shell.test("-d", '/sys/class/gpio')) {
-            usedPins.forEach(function (pin) {
-                process.stderr.write("Pin " + pin.mappedChannelIndex + " (" + pin.headerName + "):");
-                try {
-                    writeSync("/sys/class/gpio/export", pin.gpioNum);
-                    process.stderr.write("\n  export OK;");
-                }
-                catch (e) {
-                    process.stderr.write("\n  export FAIL: echo " + pin.gpioNum + " > /sys/class/gpio/export");
-                    process.stderr.write("\n    " + e);
-                }
-                try {
-                    writeSync("/sys/class/gpio/gpio" + pin.gpioNum + "/direction", "out");
-                    process.stderr.write("\n  direction OK;");
-                }
-                catch (e) {
-                    process.stderr.write("\n  direction FAIL: echo out > /sys/class/gpio/gpio" + pin.gpioNum + "/direction");
-                    process.stderr.write("\n    " + e);
-                }
-                try {
-                    writeSync("/sys/class/gpio/gpio" + pin.gpioNum + "/value", 0);
-                    process.stderr.write("\n  value OK;");
-                }
-                catch (e) {
-                    process.stderr.write("\n  value FAIL: echo 0 > /sys/class/gpio/gpio" + pin.gpioNum + "/value");
-                    process.stderr.write("\n    " + e);
-                }
-                process.stderr.write("\n");
-            });
+        function buildSetupScript() {
+            var capemgrDirectories = [
+                "/sys/devices/bone_capemgr",
+                "/sys/devices/platform/bone_capemgr",
+                "/sys/devices/bone_capemgr.9"
+            ];
+            var setupScriptPath = tempDir + "/" + modeName + "-" + mappingFilename.match(/.*?([^\/\.]+)(\..+)?/)[1] + "-" + channelCount + "ch-setup.sh";
+            var setupScript = "\nfunction enableOverlay() {\n\tOVERLAY_NAME=$1\n\t\n\tfor CAPEMGR in " + capemgrDirectories.join(" ") + "; do\n\t\tif [ -d \"$CAPEMGR\" ]; then\n\t\t\tif grep \"$OVERLAY_NAME\" \"$CAPEMGR/slots\" &>/dev/null; then\n\t\t\t\t\techo PRU overlay $OVERLAY_NAME already present in $CAPEMGR/slots\n\t\t\t\telse\n\t\t\t\t\tif echo \"$OVERLAY_NAME\" > \"$CAPEMGR/slots\"; then\n\t\t\t\t\t\techo Enabled PRU using overlay $OVERLAY_NAME into $CAPEMGR/slots\n\t\t\t\t\telse\n\t\t\t\t\t\techo ERROR: Failed to load overlay $OVERLAY_NAME into $CAPEMGR/slots\n\t\t\t\t\t\texit -1\n\t\t\t\t\tfi\n\t\t\t\tfi\n\t\t\treturn\n\t\tfi\n\tdone\n\t\n\techo ERROR: Failed to find a bone_capemgr\n\texit -1\n}\n\necho Enabling PRUs using overlay...\nenableOverlay uio_pruss_enable\n\nif modprobe uio_pruss; then\n\techo Loaded module uio_pruss\nelse\n\techo ERROR: Failed to load module uio_pruss\n\texit -1\nfi\n";
+            if (pinMapping.dtbName) {
+                var dtboSourceFilename = __dirname + "/../dts/" + pinMapping.dtbName + "-00A0.dtbo";
+                var dtboDestFilename = "/lib/firmware/" + pinMapping.dtbName + "-00A0.dtbo";
+                setupScript += "\nfor CAPEMGR in " + capemgrDirectories.join(" ") + "; do\n\tif [ -d \"$CAPEMGR\" ]; then\n\t\tif [ -e \"" + dtboSourceFilename + "\" ]; then\n\t\t\tif [ -e \"" + dtboDestFilename + "\" ]; then\n\t\t\t\techo Overlay dtbo already exists: " + dtboDestFilename + "\n\t\t\telif cp \"" + dtboSourceFilename + "\" \"" + dtboDestFilename + "\"; then\n\t\t\t\techo Copied overlay dtbo " + dtboSourceFilename + " to " + dtboDestFilename + "\n\t\t\telse\n\t\t\t\techo ERROR: Failed to copy overlay dtbo from " + dtboSourceFilename + " to " + dtboDestFilename + "\n\t\t\t\texit -1\n\t\t\tfi\n\t\t\t\n\t\t\techo Mapping LEDscape pins using overlay...\n\t\t\tenableOverlay " + pinMapping.dtbName + "\n\t\tfi\n\t\texit 0\n\tfi\ndone\n\necho ERROR: Failed to find a bone_capemgr in /sys/\nexit -1\n\t\t\t\t\t";
+            }
+            else {
+                setupScript += "if [ -d /sys/class/gpio ]; then\n";
+                usedPins.forEach(function (pin) {
+                    setupScript += "    echo 'Setting up channel " + pin.mappedChannelIndex + " (pin " + pin.headerName + ")'\n";
+                    setupScript += "    echo " + pin.gpioNum + " >> /sys/class/gpio/export\n";
+                    setupScript += "    echo out >> /sys/class/gpio/gpio" + pin.gpioNum + "/direction\n";
+                    setupScript += "    echo 0 >> /sys/class/gpio/gpio" + pin.gpioNum + "/value\n";
+                });
+                setupScript += "\n\t\t\t\telse\n\t\t\t\t\techo ERROR: No /sys/class/gpio found.\n\t\t\t\t\texit -1\n\t\t\t\tfi\n\t\t\t\t";
+            }
+            setupScript.to(setupScriptPath);
         }
-        else {
-            console.error("No /sys/class/gpio... Skipping pin setup.");
-        }
+        buildSetupScript();
         console.info("PRU0:", pru0Result.binFile);
         console.info("PRU1:", pru1Result.binFile);
     }

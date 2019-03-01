@@ -43,7 +43,7 @@ function endRow() {
 
 export function printPinTable(
 	tableTitle: string,
-	infoCellFunc: (BbbPinInfo) => string
+	infoCellFunc: (pin: BbbPinInfo) => any
 ) {
 	var infoColumnWidth = 12;
 

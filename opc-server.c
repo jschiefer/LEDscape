@@ -41,6 +41,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // DEFINES, CONSTANTS and UTILS
 #pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -65,7 +66,7 @@ typedef enum {
 	DEMO_MODE_FADE = 1,
 	DEMO_MODE_IDENTIFY = 2,
 	DEMO_MODE_BLACK = 3,
-    DEMO_MODE_POWER = 4
+	DEMO_MODE_POWER = 4
 } demo_mode_t;
 
 typedef struct {
@@ -86,6 +87,8 @@ typedef struct {
 	uint8_t interpolation_enabled;
 	uint8_t dithering_enabled;
 	uint8_t lut_enabled;
+
+	bool rgbw;
 
 	struct {
 		float red;
@@ -155,7 +158,7 @@ demo_mode_t demo_mode_from_string(const char* str) {
 	} else if (strcasecmp(str, "black") == 0) {
 		return DEMO_MODE_BLACK;
 	} else if (strcasecmp(str, "power") == 0) {
-    	return DEMO_MODE_POWER;
+		return DEMO_MODE_POWER;
 	} else {        
 		return -1;
 	}
@@ -237,12 +240,14 @@ server_config_t g_server_config = {
 	.e131_port = 5568,
 
 	.leds_per_strip = 176,
-	.used_strip_count = LEDSCAPE_NUM_STRIPS,
+	.used_strip_count = LEDSCAPE_MAX_STRIPS,
 	.color_channel_order = COLOR_ORDER_BRG,
 
 	.interpolation_enabled = TRUE,
 	.dithering_enabled = TRUE,
 	.lut_enabled = TRUE,
+
+	.rgbw = FALSE,
 
 	.white_point = { .9, 1, 1},
 	.lum_power = 2,
@@ -365,6 +370,8 @@ static struct option long_options[] =
 		{"no-dithering", no_argument, NULL, 't'},
 		{"no-lut", no_argument, NULL, 'l'},
 
+		{"rgbw", no_argument, NULL, 'w'},
+
 		{"help", no_argument, NULL, 'h'},
 
 		{"lum_power", required_argument, NULL, 'L'},
@@ -383,38 +390,6 @@ static struct option long_options[] =
 
 		{NULL, 0, NULL, 0}
 	};
-
-void set_pru_mode_and_mapping_from_legacy_output_mode_name(const char* input) {
-	if (strcasecmp(input, "NOP") == 0) {
-		strcpy(g_server_config.output_mode_name, "nop");
-		strcpy(g_server_config.output_mapping_name, "original-ledscape");
-	}
-	else if (strcasecmp(input, "DMX") == 0) {
-		strcpy(g_server_config.output_mode_name, "dmx");
-		strcpy(g_server_config.output_mapping_name, "original-ledscape");
-	}
-	else if (strcasecmp(input, "WS2801") == 0) {
-		strcpy(g_server_config.output_mode_name, "ws2801");
-		strcpy(g_server_config.output_mapping_name, "original-ledscape");
-	}
-	else if (strcasecmp(input, "WS2801_NEWPINS") == 0) {
-		strcpy(g_server_config.output_mode_name, "ws2801");
-		strcpy(g_server_config.output_mapping_name, "rgb-123-v2");
-	}
-	else /*if (strcasecmp(input, "WS281x") == 0)*/ {
-		// The default case is to use ws281x
-		strcpy(g_server_config.output_mode_name, "ws281x");
-		strcpy(g_server_config.output_mapping_name, "original-ledscape");
-	}
-
-	fprintf(stderr,
-		"WARNING: PRU mode set using legacy -0 or -1 flags; please update to use --mode and --mapping.\n"
-			"   '%s' interpreted as mode '%s' and mapping '%s'\n",
-		input,
-		g_server_config.output_mode_name,
-		g_server_config.output_mapping_name
-	);
-}
 
 void print_usage(char ** argv) {
 	printf("Usage: %s ", argv[0]);
@@ -513,7 +488,7 @@ void handle_args(int argc, char ** argv) {
 	extern char *optarg;
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:D:o:ithlL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
+	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:D:o:ithlwL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
@@ -569,6 +544,10 @@ void handle_args(int argc, char ** argv) {
 				g_server_config.lut_enabled = FALSE;
 			} break;
 
+			case 'w': {
+				g_server_config.rgbw = TRUE;
+			} break;
+
 			case 'L': {
 				g_server_config.lum_power = (float) atof(optarg);
 			} break;
@@ -583,14 +562,6 @@ void handle_args(int argc, char ** argv) {
 
 			case 'b': {
 				g_server_config.white_point.blue = (float) atof(optarg);
-			} break;
-
-			case '0': {
-				set_pru_mode_and_mapping_from_legacy_output_mode_name(optarg);
-			} break;
-
-			case '1': {
-				set_pru_mode_and_mapping_from_legacy_output_mode_name(optarg);
 			} break;
 
 			case 'm': {
@@ -637,17 +608,18 @@ void handle_args(int argc, char ** argv) {
 							case 'd': printf("Alternative to --count; specifies pixel count as a dimension, e.g. 16x16 (256 pixels)"); break;
 							case 'D':
 								printf("Configures the idle (demo) mode which activates when no data arrives for more than 5 seconds. Modes:\n");
-						        printf("\t- none   Do nothing; leaving LED colors as they were\n");
-						        printf("\t- black  Turn off all LEDs");
-						        printf("\t- fade   Display a rainbow fade across all LEDs\n");
-						        printf("\t- id     Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
-						        break;
+								printf("\t- none   Do nothing; leaving LED colors as they were\n");
+								printf("\t- black  Turn off all LEDs");
+								printf("\t- fade   Display a rainbow fade across all LEDs\n");
+								printf("\t- id     Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
+								break;
 							case 'o':
 								printf("Specifies the color channel output order (RGB, RBG, GRB, GBR, BGR or BRG); default is BRG.");
-						        break;
+								break;
 							case 'i': printf("Disables interpolation between frames (choppier output but improves performance)"); break;
 							case 't': printf("Disables dithering (choppier output but improves performance)"); break;
 							case 'l': printf("Disables luminance correction (lower color values appear brighter than they should)"); break;
+							case 'w': printf("Enables RGBW mode, which generates white-channel data from the RGB data. Must be used with an appropriate color-order"); break;
 							case 'L': printf("Sets the exponent of the luminance power function to the given floating point value (default 2)"); break;
 							case 'r': printf("Sets the red balance to the given floating point number (0-1, default .9)"); break;
 							case 'g': printf("Sets the red balance to the given floating point number (0-1, default 1)"); break;
@@ -656,21 +628,21 @@ void handle_args(int argc, char ** argv) {
 							case '1': printf("[deprecated] Sets the PRU1 program. Use --mode and --mapping instead."); break;
 							case 'm':
 								printf("Sets the output mode:\n");
-						        printf("\t- nop      Disable output; can be useful for debugging\n");
-						        printf("\t- ws281x   WS2811/WS2812 output format\n");
-						        printf("\t- ws2801   WS2801-compatible 8-bit SPI output. Supports 24 channels of output with pins in a DATA/CLOCK configuration.\n");
-						        printf("\t- dmx      DMX compatible output (does not support RDM)\n");
-						        break;
+								printf("\t- nop      Disable output; can be useful for debugging\n");
+								printf("\t- ws281x   WS2811/WS2812 output format\n");
+								printf("\t- ws2801   WS2801-compatible 8-bit SPI output. Supports 24 channels of output with pins in a DATA/CLOCK configuration.\n");
+								printf("\t- dmx      DMX compatible output (does not support RDM)\n");
+								break;
 							case 'M':
 								printf("Sets the pin mapping used:\n");
-						        printf("\toriginal-ledscape: Original LEDscape pinmapping. Used on older RGB-123 capes.\n");
-						        printf("\trgb-123-v2: RGB-123 mapping for new capes\n");
-						        break;
+								printf("\toriginal-ledscape: Original LEDscape pinmapping. Used on older RGB-123 capes.\n");
+								printf("\trgb-123-v2: RGB-123 mapping for new capes\n");
+								break;
 							case 'C':
 								printf("Specifies a configuration file to use and creates it if it does not already exist.\n");
-						        printf("\tIf used with other options, options are parsed in order. Options before --config are overwritten\n");
-						        printf("\tby the config file, and options afterwards will be saved to the config file.\n");
-						        break;
+								printf("\tIf used with other options, options are parsed in order. Options before --config are overwritten\n");
+								printf("\tby the config file, and options afterwards will be saved to the config file.\n");
+								break;
 							case 'h': printf("Displays this help message"); break;
 							default: printf("Undocumented option: %c\n", option_info.val);
 						}
@@ -684,9 +656,9 @@ void handle_args(int argc, char ** argv) {
 
 			default:
 				printf("Invalid option: %c\n\n", opt);
-		        print_usage(argv);
-		        printf("\nUse -h or --help for more information\n\n");
-		        exit(EXIT_FAILURE);
+				print_usage(argv);
+				printf("\nUse -h or --help for more information\n\n");
+				exit(EXIT_FAILURE);
 		}
 	}
 }
@@ -726,7 +698,7 @@ int main(int argc, char ** argv)
 
 	fprintf(stderr,
 		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
-		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
+		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_MAX_STRIPS
 	);
 
 	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
@@ -747,7 +719,7 @@ int main(int argc, char ** argv)
 }
 
 void ensure_server_setup() {
-	printf("[main] Initializing / Updating server...");
+	printf("[main] Initializing / Updating server...\n");
 
 	// Setup tables
 	build_lookup_tables();
@@ -778,19 +750,19 @@ void ensure_server_setup() {
 
 	if (ledscape_init_needed) {
 		if (g_runtime_state.leds != NULL) {
-			printf("[main] Closing LEDscape...");
+			printf("[main] Closing LEDscape...\n");
 
 			ledscape_close(g_runtime_state.leds);
 			g_runtime_state.leds = NULL;
 		}
 
 		// Init LEDscape
-		printf("[main] Starting LEDscape...");
+		printf("[main] Starting LEDscape...\n");
 		g_runtime_state.leds = ledscape_init_with_mode_mapping(
 			g_server_config.used_strip_count,
 			g_server_config.leds_per_strip,
 			g_server_config.output_mapping_name,
-		    g_server_config.output_mode_name
+			g_server_config.output_mode_name
 		);
 		g_runtime_state.leds_per_strip = g_server_config.leds_per_strip;
 	}
@@ -960,7 +932,7 @@ int server_config_from_json(
 	// Tokenize json string, fill in tokens array
 	json_tokens = parse_json2(json, json_size);
 
-	printf("tokens: %d: %s\n", json_size, json);
+	// printf("tokens: %d: %s\n", json_size, json);
 
 	if (json_tokens == NULL) {
 		// Invalid JSON...
@@ -1025,6 +997,11 @@ int server_config_from_json(
 		output_config->lut_enabled = strcasecmp(token_value, "true") == 0 ? TRUE : FALSE;
 	}
 
+	if ((token = find_json_token(json_tokens, "rgbw"))) {
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->rgbw = strcasecmp(token_value, "true") == 0 ? TRUE : FALSE;
+	}
+
 	if ((token = find_json_token(json_tokens, "lumCurvePower"))) {
 		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
 		output_config->lum_power = atof(token_value);
@@ -1073,6 +1050,8 @@ void server_config_to_json(char* dest_string, size_t dest_string_size, server_co
 			"\t" "\"enableDithering\": %s," "\n"
 			"\t" "\"enableLookupTable\": %s," "\n"
 
+			"\t" "\"rgbw\": %s," "\n"
+
 			"\t" "\"lumCurvePower\": %.4f," "\n"
 			"\t" "\"whitePoint\": {" "\n"
 			"\t\t" "\"red\": %.4f," "\n"
@@ -1097,6 +1076,8 @@ void server_config_to_json(char* dest_string, size_t dest_string_size, server_co
 		input_config->interpolation_enabled ? "true" : "false",
 		input_config->dithering_enabled ? "true" : "false",
 		input_config->lut_enabled ? "true" : "false",
+
+		input_config->rgbw ? "true" : "false",
 
 		(double)input_config->lum_power,
 		(double)input_config->white_point.red,
@@ -1143,12 +1124,12 @@ void build_lookup_tables() {
 */
 void ensure_frame_data() {
 	pthread_mutex_lock(&g_server_config.mutex);
-	uint32_t led_count = (uint32_t)(g_server_config.leds_per_strip) * LEDSCAPE_NUM_STRIPS;
+	uint32_t led_count = (uint32_t)(g_server_config.leds_per_strip) * LEDSCAPE_MAX_STRIPS;
 	pthread_mutex_unlock(&g_server_config.mutex);
 
 	pthread_mutex_lock(&g_runtime_state.mutex);
 	if (g_runtime_state.frame_size != led_count) {
-		fprintf(stderr, "Allocating buffers for %d pixels (%lu bytes)\n", led_count, led_count * 3 /*channels*/ * 4 /*buffers*/ * sizeof(uint16_t));
+		fprintf(stderr, "[main] Allocating buffers for %d pixels (%lu bytes)\n", led_count, led_count * 3 /*channels*/ * 4 /*buffers*/ * sizeof(uint16_t));
 
 		if (g_runtime_state.previous_frame_data != NULL) {
 			free(g_runtime_state.previous_frame_data);
@@ -1163,7 +1144,7 @@ void ensure_frame_data() {
 		g_runtime_state.next_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
 		g_runtime_state.frame_dithering_overflow = malloc(led_count * sizeof(pixel_delta_t));
 		g_runtime_state.has_next_frame = FALSE;
-		printf("frame_size1=%u\n", g_runtime_state.frame_size);
+		//printf("frame_size1=%u\n", g_runtime_state.frame_size);
 
 		// Init timestamps
 		gettimeofday(&g_runtime_state.previous_frame_tv, NULL);
@@ -1269,17 +1250,20 @@ inline uint32_t lutInterpolate(uint32_t value, uint32_t* lut) {
 void* render_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
-	fprintf(stderr, "[render] Starting render thread for %u total pixels\n", g_server_config.leds_per_strip * LEDSCAPE_NUM_STRIPS);
+	fprintf(stderr, "[render] Starting render thread for %u total pixels\n", g_server_config.leds_per_strip * LEDSCAPE_MAX_STRIPS);
 
 	// Timing Variables
 	struct timeval frame_progress_tv, now_tv;
-	uint16_t frame_progress16, inv_frame_progress16;
+	uint16_t frame_progress16=0, inv_frame_progress16=0;
+	gettimeofday(&now_tv, NULL);
 
 	const unsigned fps_report_interval_seconds = 10;
-	uint64_t last_report = 0;
+	uint64_t last_report = now_tv.tv_sec - (fps_report_interval_seconds - 1);
 	uint64_t frame_duration_sum_usec = 0;
 	uint32_t frames_since_last_fps_report = 0;
+	uint32_t dithering_enabled_frames_since_last_fps_report = 0;
 	uint64_t frame_duration_avg_usec = 2000;
+
 
 	uint8_t buffer_index = 0;
 	int8_t ditheringFrame = 0;
@@ -1296,73 +1280,73 @@ void* render_thread(void* unused_data)
 			usleep(1e6 /* 1s */);
 			continue;
 		}
-        
-        bool interpolation_enabled = g_server_config.interpolation_enabled;
-        
-        // If interpolation not enabled, then we only care about the current frame and want to fully display it immediately
-                
-        if (!interpolation_enabled) {
-            
-            if (g_runtime_state.has_next_frame) {        
-                
-                // Make the next frame the current frame
-                rotate_frames(FALSE);
-            }
-            
-            if (!g_runtime_state.has_current_frame) {
-                pthread_mutex_unlock(&g_runtime_state.mutex);
-                usleep(10e3 /* 10ms */);
-                continue;
-            }
-            
-        } else {
-            
-            // Skip frames if there isn't enough data
-            if (!g_runtime_state.has_prev_frame || !g_runtime_state.has_current_frame) {
-                pthread_mutex_unlock(&g_runtime_state.mutex);
-                usleep(10e3 /* 10ms */);
-                continue;
-            }
-            
-            // Calculate the time delta and current percentage (as a 16-bit value)
-            gettimeofday(&now_tv, NULL);
-            timersub(&now_tv, &g_runtime_state.next_frame_tv, &frame_progress_tv);
 
-            // Calculate current frame and previous frame time
-            uint64_t frame_progress_us = (uint64_t) (frame_progress_tv.tv_sec*1e6 + frame_progress_tv.tv_usec);
-            uint64_t last_frame_time_us = (uint64_t) (g_runtime_state.prev_current_delta_tv.tv_sec*1e6 + g_runtime_state.prev_current_delta_tv.tv_usec);
+		bool interpolation_enabled = g_server_config.interpolation_enabled;
 
-            // Check for current frame exhaustion
-            if (frame_progress_us > last_frame_time_us) {
-                uint8_t has_next_frame = g_runtime_state.has_next_frame;
-                pthread_mutex_unlock(&g_runtime_state.mutex);
+		// If interpolation not enabled, then we only care about the current frame and want to fully display it immediately
 
-                // This should only happen in a final frame case -- to avoid early switching (and some nasty resulting
-                // artifacts) we only force frame rotation if the next frame is really late.
-                if (has_next_frame && frame_progress_us > last_frame_time_us*2) {
-                    // If we have more data, rotate it in.
-                    printf("Need data: rotating in; frame_progress_us=%llu; last_frame_time_us=%llu\n", frame_progress_us, last_frame_time_us);
-                    rotate_frames(TRUE);
-                } else {
-                    // Otherwise sleep for a moment and wait for more data
-                    printf("Need data: none available; frame_progress_us=%llu; last_frame_time_us=%llu\n", frame_progress_us, last_frame_time_us);
-                    usleep(1e3);
-                }
+		if (!interpolation_enabled) {
 
-                continue;
-            }
+			if (g_runtime_state.has_next_frame) {
 
-            frame_progress16 = (uint16_t) ((frame_progress_us << 16) / last_frame_time_us);
-            inv_frame_progress16 = (uint16_t) (0xFFFF - frame_progress16);
+				// Make the next frame the current frame
+				rotate_frames(FALSE);
+			}
 
-            if (frame_progress_tv.tv_sec > 5) {
-                printf("[render] No data for 5 seconds; suspending render thread.\n");
-                pthread_mutex_unlock(&g_runtime_state.mutex);
-                usleep(100e3 /* 100ms */);
-                continue;
-            }
-            
-        }   
+			if (!g_runtime_state.has_current_frame) {
+				pthread_mutex_unlock(&g_runtime_state.mutex);
+				usleep(10e3 /* 10ms */);
+				continue;
+			}
+
+		} else { /* Interpolation enabled */
+
+			// Skip frames if there isn't enough data
+			if (!g_runtime_state.has_prev_frame || !g_runtime_state.has_current_frame) {
+				pthread_mutex_unlock(&g_runtime_state.mutex);
+				usleep(10e3 /* 10ms */);
+				continue;
+			}
+
+			// Calculate the time delta and current percentage (as a 16-bit value)
+			gettimeofday(&now_tv, NULL);
+			timersub(&now_tv, &g_runtime_state.next_frame_tv, &frame_progress_tv);
+
+			// Calculate current frame and previous frame time
+			uint64_t frame_progress_us = (uint64_t) (frame_progress_tv.tv_sec*1e6 + frame_progress_tv.tv_usec);
+			uint64_t last_frame_time_us = (uint64_t) (g_runtime_state.prev_current_delta_tv.tv_sec*1e6 + g_runtime_state.prev_current_delta_tv.tv_usec);
+
+			// Check for current frame exhaustion
+			if (frame_progress_us > last_frame_time_us) {
+				uint8_t has_next_frame = g_runtime_state.has_next_frame;
+				pthread_mutex_unlock(&g_runtime_state.mutex);
+
+				// This should only happen in a final frame case -- to avoid early switching (and some nasty resulting
+				// artifacts) we only force frame rotation if the next frame is really late.
+				if (has_next_frame && frame_progress_us > last_frame_time_us*2) {
+					// If we have more data, rotate it in.
+					printf("Need data: rotating in; frame_progress_us=%llu; last_frame_time_us=%llu\n", frame_progress_us, last_frame_time_us);
+					rotate_frames(TRUE);
+				} else {
+					// Otherwise sleep for a moment and wait for more data
+					//printf("Need data: none available; frame_progress_us=%llu; last_frame_time_us=%llu\n", frame_progress_us, last_frame_time_us);
+					usleep(1e3);
+				}
+
+				continue;
+			}
+
+			frame_progress16 = (uint16_t) ((frame_progress_us << 16) / last_frame_time_us);
+			inv_frame_progress16 = (uint16_t) (0xFFFF - frame_progress16);
+
+			if (frame_progress_tv.tv_sec > 5) {
+				printf("[render] No data for 5 seconds; suspending render thread.\n");
+				pthread_mutex_unlock(&g_runtime_state.mutex);
+				usleep(100e3 /* 100ms */);
+				continue;
+			}
+
+		}
 
 		// printf("%d of %d (%d)\n",
 		// 	(frame_progress_tv.tv_sec*1000000 + frame_progress_tv.tv_usec) ,
@@ -1371,13 +1355,15 @@ void* render_thread(void* unused_data)
 		// );
 
 		// Setup LEDscape for this frame
-		buffer_index = (buffer_index+1)%2;
+		buffer_index = (buffer_index == 0)
+		               ? (uint8_t) 1
+		               : (uint8_t) 0;
 
 		ledscape_frame_t * const frame = ledscape_frame(g_runtime_state.leds, buffer_index);
 
 		// Build the render frame
 		uint32_t led_count = g_runtime_state.frame_size;
-		uint32_t leds_per_strip = led_count / LEDSCAPE_NUM_STRIPS;
+		uint32_t leds_per_strip = led_count / LEDSCAPE_MAX_STRIPS;
 		uint32_t data_index = 0;
 
 		// Update the dithering frame counter
@@ -1393,19 +1379,24 @@ void* render_thread(void* unused_data)
 		pthread_mutex_lock(&g_server_config.mutex);
 
 		// Use the strip count from configs. This can save time that would be used dithering
-		used_strip_count = min(g_server_config.used_strip_count, LEDSCAPE_NUM_STRIPS);
+		used_strip_count = min(g_server_config.used_strip_count, LEDSCAPE_MAX_STRIPS);
 
 		// Only enable dithering if we're better than 100fps
 		bool dithering_enabled = (frame_duration_avg_usec < 10000) && g_server_config.dithering_enabled;
+
+		// Keep track of how often we actually use dithering
+		if (dithering_enabled)
+			dithering_enabled_frames_since_last_fps_report ++;
 		
 		bool lut_enabled = g_server_config.lut_enabled;
+		bool use_rgbw = g_server_config.rgbw;
 
 		color_channel_order_t color_channel_order = g_server_config.color_channel_order;
 
 		pthread_mutex_unlock(&g_server_config.mutex);
 
 		// Only allow dithering to take effect if it blinks faster than 60fps
-		uint32_t maxDitherFrames = 16667 / frame_duration_avg_usec;
+		uint32_t maxDitherFrames = (uint32_t) (16667 / frame_duration_avg_usec);
 
 		for (uint32_t strip_index=0; strip_index<used_strip_count; strip_index++) {
 			for (uint32_t led_index=0; led_index<leds_per_strip; led_index++, data_index++) {
@@ -1470,19 +1461,33 @@ void* render_thread(void* unused_data)
 				uint8_t g = (uint8_t) min((ditheredG+0x80) >> 8, 255);
 				uint8_t b = (uint8_t) min((ditheredB+0x80) >> 8, 255);
 
-				ledscape_pixel_set_color(
-					pixel_out,
-					color_channel_order,
-					r,
-					g,
-					b
-				);
+				if (use_rgbw) {
+					uint8_t w = min(r, min(g, b));
+
+					ledscape_pixel_set_color(
+						pixel_out,
+						color_channel_order,
+						r - w,
+						g - w,
+						b - w,
+						w
+					);
+				} else {
+					ledscape_pixel_set_color(
+						pixel_out,
+						color_channel_order,
+						r,
+						g,
+						b,
+						0
+					);
+				}
 
 //				if (led_index == 0 && strip_index == 3) {
 //					printf("channel %d: %03d %03d %03d\n", strip_index, r, g, b);
 //				}
 
-				// Check for interpolation effect
+				// Take note of which channels were affected by dithering to support the blink-reduction above
 				if (r != (interpolatedR+0x80)>>8) pixel_in_overflow->last_effect_frame_r = ditheringFrame;
 				if (g != (interpolatedG+0x80)>>8) pixel_in_overflow->last_effect_frame_g = ditheringFrame;
 				if (b != (interpolatedB+0x80)>>8) pixel_in_overflow->last_effect_frame_b = ditheringFrame;
@@ -1499,8 +1504,9 @@ void* render_thread(void* unused_data)
 			}
 		}
 
-        // Wait for previous send to complete if still in progress
+		// Wait for previous send to complete if still in progress
 		ledscape_wait(g_runtime_state.leds);
+
 		// Send the frame to the PRU
 		ledscape_draw(g_runtime_state.leds, buffer_index);
 
@@ -1516,13 +1522,16 @@ void* render_thread(void* unused_data)
 			last_report = stop_tv.tv_sec;
 
 			frame_duration_avg_usec = frame_duration_sum_usec / frames_since_last_fps_report;
-			printf("[render] fps_info={frame_avg_usec: %qu, possible_fps: %.2f, actual_fps: %.2f, sample_frames: %u}\n",
+			printf("[render] fps_info={frame_avg_usec: %qu, possible_fps: %.2f, actual_fps: %.2f, sample_frames: %u, dithering_frames: %f%%}\n",
 				frame_duration_avg_usec,
 				(1.0e6 / frame_duration_avg_usec),
 				frames_since_last_fps_report * 1.0 / fps_report_interval_seconds,
-				frames_since_last_fps_report
+				frames_since_last_fps_report,
+
+				(double)dithering_enabled_frames_since_last_fps_report / frames_since_last_fps_report
 			);
 
+			dithering_enabled_frames_since_last_fps_report = 0;
 			frames_since_last_fps_report = 0;
 			frame_duration_sum_usec = 0;
 		}
@@ -1548,7 +1557,7 @@ typedef enum
 	OPC_SYSID_FADECANDY = 1,
 
 	// Pending approval from the OPC folks
-		OPC_SYSID_LEDSCAPE = 2
+	OPC_SYSID_LEDSCAPE = 2
 } opc_system_id_t;
 
 typedef enum
@@ -1577,39 +1586,39 @@ void HSBtoRGB(int32_t hue, int32_t sat, int32_t val, uint8_t out[]) {
 		switch((hue%360)/60) {
 			case 0:
 				r = val;
-		        g = (((val-base)*hue)/60)+base;
-		        b = base;
-		        break;
+				g = (((val-base)*hue)/60)+base;
+				b = base;
+				break;
 
 			case 1:
 				r = (((val-base)*(60-(hue%60)))/60)+base;
-		        g = val;
-		        b = base;
-		        break;
+				g = val;
+				b = base;
+				break;
 
 			case 2:
 				r = base;
-		        g = val;
-		        b = (((val-base)*(hue%60))/60)+base;
-		        break;
+				g = val;
+				b = (((val-base)*(hue%60))/60)+base;
+				break;
 
 			case 3:
 				r = base;
-		        g = (((val-base)*(60-(hue%60)))/60)+base;
-		        b = val;
-		        break;
+				g = (((val-base)*(60-(hue%60)))/60)+base;
+				b = val;
+				break;
 
 			case 4:
 				r = (((val-base)*(hue%60))/60)+base;
-		        g = base;
-		        b = val;
-		        break;
+				g = base;
+				b = val;
+				break;
 
 			case 5:
 				r = val;
-		        g = base;
-		        b = (((val-base)*(60-(hue%60)))/60)+base;
-		        break;
+				g = base;
+				b = (((val-base)*(60-(hue%60)))/60)+base;
+				break;
 		}
 
 		out[0] = (uint8_t) r;
@@ -1621,7 +1630,7 @@ void HSBtoRGB(int32_t hue, int32_t sat, int32_t val, uint8_t out[]) {
 void* demo_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
-	fprintf(stderr, "Starting demo data thread\n");
+	fprintf(stderr, "[main] Starting demo data thread\n");
 
 	uint8_t* buffer = NULL;
 	uint32_t buffer_size = 0;
@@ -1639,7 +1648,7 @@ void* demo_thread(void* unused_data)
 
 		pthread_mutex_lock(&g_server_config.mutex);
 		uint32_t leds_per_strip = g_server_config.leds_per_strip;
-		uint32_t channel_count = g_server_config.leds_per_strip*3*LEDSCAPE_NUM_STRIPS;
+		uint32_t channel_count = g_server_config.leds_per_strip*3*LEDSCAPE_MAX_STRIPS;
 		demo_mode_t demo_mode = g_server_config.demo_mode;
 		pthread_mutex_unlock(&g_server_config.mutex);
 
@@ -1665,7 +1674,7 @@ void* demo_thread(void* unused_data)
 				memset(buffer, 0, buffer_size);
 			}
 
-			for (uint32_t strip = 0, data_index = 0 ; strip < LEDSCAPE_NUM_STRIPS ; strip++)
+			for (uint32_t strip = 0, data_index = 0 ; strip < LEDSCAPE_MAX_STRIPS ; strip++)
 			{
 				for (uint16_t p = 0 ; p < leds_per_strip; p++, data_index+=3)
 				{
@@ -1688,9 +1697,12 @@ void* demo_thread(void* unused_data)
 						case DEMO_MODE_FADE: {
 							int baseBrightness = 196;
 							int brightnessChange = 128;
+
+							int baseSaturation = 190;
+							int saturationChange = 64;
 							HSBtoRGB(
 								((frame_index + ((p + strip*leds_per_strip)*360)/(leds_per_strip*10)) % 360),
-								255,
+								baseSaturation - (((frame_index / 5) + (p*saturationChange)/leds_per_strip + strip*5) % saturationChange),
 								baseBrightness - (((frame_index /10) + (p*brightnessChange)/leds_per_strip + strip*10) % brightnessChange),
 								&buffer[data_index]
 							);
@@ -1699,11 +1711,11 @@ void* demo_thread(void* unused_data)
 						case DEMO_MODE_BLACK: {
 							buffer[data_index] = buffer[data_index+1] = buffer[data_index+2] = 0;
 						} break;
-                        
+
 						case DEMO_MODE_POWER: {
-    						buffer[data_index] = buffer[data_index+1] = buffer[data_index+2] = 0xff;
+							buffer[data_index] = buffer[data_index+1] = buffer[data_index+2] = 0xff;
 						} break;
-                        
+
 					}
 				}
 			}
@@ -1779,8 +1791,6 @@ int join_multicast_group_on_all_ifaces(
 
 void* e131_server_thread(void* unused_data)
 {
-	unused_data=unused_data; // Suppress Warnings
-
 	// Disable if given port 0
 	if (g_server_config.e131_port == 0) {
 		fprintf(stderr, "[e131] Not starting e131 server; Port is zero.\n");
@@ -1832,7 +1842,7 @@ void* e131_server_thread(void* unused_data)
 		// Ensure the buffer
 		pthread_mutex_lock(&g_server_config.mutex);
 		uint32_t leds_per_strip = g_server_config.leds_per_strip;
-		uint32_t led_count = g_server_config.leds_per_strip * LEDSCAPE_NUM_STRIPS;
+		uint32_t led_count = g_server_config.leds_per_strip * LEDSCAPE_MAX_STRIPS;
 		pthread_mutex_unlock(&g_server_config.mutex);
 
 		if (dmx_buffer == NULL || dmx_buffer_size != led_count) {
@@ -1894,7 +1904,7 @@ void* e131_server_thread(void* unused_data)
 			frame_counter_at_last_update = g_runtime_state.frame_counter;
 		}
 
-		if (packets_since_update >= LEDSCAPE_NUM_STRIPS) {
+		if (packets_since_update >= LEDSCAPE_MAX_STRIPS) {
 			// Force an update here
 			while (g_runtime_state.frame_counter == frame_counter_at_last_update)
 				usleep(1e3 /* 1ms */);
@@ -1910,8 +1920,6 @@ void* e131_server_thread(void* unused_data)
 
 void* udp_server_thread(void* unused_data)
 {
-	unused_data=unused_data; // Suppress Warnings
-
 	// Disable if given port 0
 	if (g_server_config.udp_port == 0) {
 		fprintf(stderr, "[udp] Not starting UDP server; Port is zero.\n");
@@ -2049,8 +2057,6 @@ static void event_handler(struct ns_connection *conn, enum ns_event ev, void *ev
 
 void* tcp_server_thread(void* unused_data)
 {
-	unused_data=unused_data; // Suppress Warnings
-
 	// Disable if given port 0
 	if (g_server_config.tcp_port == 0) {
 		fprintf(stderr, "[tcp] Not starting TCP server; Port is zero.\n");

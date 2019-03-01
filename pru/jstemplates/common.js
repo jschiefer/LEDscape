@@ -427,6 +427,20 @@ var BasePruProgram = (function () {
         this.MOV(this.r_temp1, 0);
     };
     /**
+     * Checks if the given pin is zero, and clears the corresponding r30 bit in the given register.
+     *
+     * @param pin The pin whose bit should be tested
+     * @param r30Reg Register where the R30 bit should be set.
+     */
+    BasePruProgram.prototype.TEST_BIT_ZERO_R30 = function (pin, r30Reg) {
+        if (r30Reg === void 0) { r30Reg = this.r_temp2; }
+        var label_name = "channel_" + pin.pruDataChannel + "_zero_skip";
+        this.emitComment("Test if pin (pruDataChannel=" + pin.pruDataChannel + ", global=" + pin.dataChannelIndex + ") is ZERO and SET bit " + pin.r30bit + " in " + r30Reg + " for use with r30");
+        this.QBBS(label_name, this.r_datas[pin.dataChannelIndex], this.r_bit_num);
+        this.CLR(r30Reg, r30Reg, pin.r30bit);
+        this.emitLabel(label_name, true);
+    };
+    /**
      * Checks if the bit indexed by the r_bit_num register in the regN register is a zero, and if so, sets the bit in the
      * corresponding _zeros register. CHANNEL_BANK_NAME and CHANNEL_BIT are used to lookup the bank and bit num.
      *
@@ -464,6 +478,15 @@ var BasePruProgram = (function () {
         //this.LBCO(this.r_data_addr, this.CONST_PRUDRAM, 0, 4);
         this.emitComment("Load " + channelCount + " channels of data into data registers");
         this.LBBO(this.r_data0, this.r_data_addr, firstPin.dataChannelIndex * 4 + firstChannel * 4, channelCount * 4);
+    };
+    BasePruProgram.prototype.PREP_GPIO_MASK_FOR_PINS_R30 = function (pins, reg) {
+        if (reg === void 0) { reg = this.r_temp1; }
+        this.emitComment("Set " + reg + " with a mask for setting or clearing channels " + pins.map(this.shortNameForPin).join(", "));
+        var mask = 0;
+        pins.forEach(function (pin) {
+            mask |= 1 << pin.r30bit;
+        });
+        this.MOV(reg, this.toHexLiteral(mask));
     };
     BasePruProgram.prototype.PREP_GPIO_MASK_FOR_PINS = function (pins) {
         this.emitComment("Set the GPIO (bank " + pins[0].gpioBank + ") mask register for setting or clearing channels " + pins.map(this.shortNameForPin).join(", "));
@@ -510,6 +533,16 @@ var BasePruProgram = (function () {
                 _this.APPLY_GPIO_CHANGES();
             });
         });
+    };
+    BasePruProgram.prototype.PINS_LOW_R30 = function (pins, pinsLabel) {
+        this.emitComment((pinsLabel || "") + ' Pins LOW: ' + pins.map(this.shortNameForPin).join(", "));
+        this.MOV(this.r_temp2, this.toHexLiteral(0xFFFFFFFF ^ pins.map(function (p) { return 1 << p.r30bit; }).reduce(function (a, b) { return a | b; })));
+        this.AND(this.r30, this.r30, this.r_temp2);
+    };
+    BasePruProgram.prototype.PINS_HIGH_R30 = function (pins, pinsLabel) {
+        this.emitComment((pinsLabel || "") + ' Pins LOW: ' + pins.map(this.shortNameForPin).join(", "));
+        this.MOV(this.r_temp2, this.toHexLiteral(pins.map(function (p) { return 1 << p.r30bit; }).reduce(function (a, b) { return a | b; })));
+        this.OR(this.r30, this.r30, this.r_temp2);
     };
     BasePruProgram.prototype.PINS_LOW = function (pins, pinsLabel) {
         var _this = this;

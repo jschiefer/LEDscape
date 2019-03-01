@@ -433,7 +433,7 @@ partition_drive () {
 		LC_ALL=C sfdisk --force --in-order --Linux --unit M "${destination}" <<-__EOF__
 			${conf_boot_startmb},${conf_boot_endmb},${sfdisk_fstype},*
 			,,,-
-		__EOF__
+__EOF__
 
 		flush_cache
 		format_boot
@@ -449,7 +449,7 @@ partition_drive () {
 		echo "Formatting: ${destination}"
 		LC_ALL=C sfdisk --force --in-order --Linux --unit M "${destination}" <<-__EOF__
 			${conf_boot_startmb},,${sfdisk_fstype},*
-		__EOF__
+__EOF__
 
 		flush_cache
 		format_single_root

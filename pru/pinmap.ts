@@ -7,21 +7,22 @@ import {PinMappingData} from "./bbbPinData";
 import {BasePruProgram} from "./jstemplates/common";
 import {GeneratedPruProgram} from "./jstemplates/common";
 
-var XXH = require('xxhashjs');
+const XXH = require('xxhashjs');
 
 function writeSync(fname, data) {
-	var fd = fs.openSync(fname, "w");
+	const fd = fs.openSync(fname, "w");
 	fs.writeSync(fd, data);
 	fs.closeSync(fd);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Program Commands
-var Commands = {
+const Commands = {
 	"tables": function(){
 		printPinTable("GPIO: BANK_BIT", pin => pin.gpioNum ? pin.gpioName : "");
 		printPinTable("GPIO: Global Number", pin => pin.gpioNum || "");
 		printPinTable("Mapped Channel Index", pin => pin.mappedChannelIndex != undefined ? pin.mappedChannelIndex : "");
+		printPinTable("HDMI / eMMC Conflicts", pin => pin.mappedChannelIndex != undefined ? (pin.mappedChannelIndex + (pin.bbbHdmiPin?"H":"") + (pin.emmcPin?"E":"")) : "");
 
 		printPinTable("Unused Channels", pin => (pin.mappedChannelIndex == undefined && pin.gpioNum != undefined) ? pin.gpioName : "");
 
@@ -47,17 +48,17 @@ var Commands = {
 	},
 
 	"pru-setup": function(options) {
-		var tempDir = shell.tempdir() + "/ledscape";
+		let tempDir = shell.tempdir() + "/ledscape";
 		if (typeof(options.tempDir) === "string") {
 			tempDir = options.tempDir;
 		}
 
-		var modeName = options.mode;
+		let modeName = options.mode;
 		if (typeof(modeName) !== "string") {
 			usage("--mode requires an argument");
 		}
 
-		var channelCount = options["channel-count"] | 0;
+		let channelCount = options["channel-count"] | 0;
 		if (!(channelCount > 0 && channelCount <= 48)) {
 			usage("--channel-count must be an integer between 1 and 48")
 		}
@@ -67,16 +68,16 @@ var Commands = {
 		shell.cp("-f", __dirname + "/jstemplates/common.p.h", tempDir);
 
 		function buildProgram(pruNum) {
-			var asmGenerationResult = generatePruProgram(modeName, pruNum, channelCount);
+			let asmGenerationResult = generatePruProgram(modeName, pruNum, channelCount);
 
 			function pathOf(name) { return tempDir + "/" + name; }
 
-			var programName = modeName + "-" + mappingFilename.match(/.*?([^\/\.]+)(\..+)?/)[1] + "-pru" + pruNum;
-			var asmCodeHash = XXH(asmGenerationResult.pruCode, 0x243F6A88).toString(16);
+			let programName = modeName + "-" + mappingFilename.match(/.*?([^\/\.]+)(\..+)?/)[1] + "-pru" + pruNum + "-" + channelCount + "ch";
+			let asmCodeHash = XXH(asmGenerationResult.pruCode, 0x243F6A88).toString(16);
 
-			var asmFileName = programName + ".p";
-			var binFileName = programName + ".bin";
-			var hashFileName = programName + ".xxh";
+			let asmFileName = programName + ".p";
+			let binFileName = programName + ".bin";
+			let hashFileName = programName + ".xxh";
 
 			if (!shell.test("-e", pathOf(hashFileName)) || shell.cat(pathOf(hashFileName)) != asmCodeHash) {
 				(<any>asmGenerationResult.pruCode).to(pathOf(asmFileName));
@@ -97,44 +98,106 @@ var Commands = {
 			}
 		}
 
-		var pru0Result = buildProgram(0);
-		var pru1Result = buildProgram(1);
+		let pru0Result = buildProgram(0);
+		let pru1Result = buildProgram(1);
 
-		var usedPins = pru0Result.usedPins.concat(pru1Result.usedPins);
+		let usedPins = pru0Result.usedPins.concat(pru1Result.usedPins);
 
-		if (shell.test("-d", '/sys/class/gpio')) {
-			usedPins.forEach(function (pin) {
-				process.stderr.write("Pin " + pin.mappedChannelIndex + " (" + pin.headerName + "):");
+		function buildSetupScript() {
+			const capemgrDirectories = [
+				"/sys/devices/bone_capemgr",
+				"/sys/devices/platform/bone_capemgr",
+				"/sys/devices/bone_capemgr.9"
+			];
+			const setupScriptPath = tempDir + "/" + modeName + "-" + mappingFilename.match(/.*?([^\/\.]+)(\..+)?/)[1] + "-" + channelCount + "ch-setup.sh";
 
-				try {
-					writeSync("/sys/class/gpio/export", pin.gpioNum);
-					process.stderr.write("\n  export OK;");
-				} catch (e) {
-					process.stderr.write("\n  export FAIL: echo " + pin.gpioNum + " > /sys/class/gpio/export");
-					process.stderr.write("\n    " + e);
-				}
+			let setupScript = `
+function enableOverlay() {
+	OVERLAY_NAME=$1
+	
+	for CAPEMGR in ${capemgrDirectories.join(" ")}; do
+		if [ -d "$CAPEMGR" ]; then
+			if grep "$OVERLAY_NAME" "$CAPEMGR/slots" &>/dev/null; then
+					echo PRU overlay $OVERLAY_NAME already present in $CAPEMGR/slots
+				else
+					if echo "$OVERLAY_NAME" > "$CAPEMGR/slots"; then
+						echo Enabled PRU using overlay $OVERLAY_NAME into $CAPEMGR/slots
+					else
+						echo ERROR: Failed to load overlay $OVERLAY_NAME into $CAPEMGR/slots
+						exit -1
+					fi
+				fi
+			return
+		fi
+	done
+	
+	echo ERROR: Failed to find a bone_capemgr
+	exit -1
+}
 
-				try {
-					writeSync("/sys/class/gpio/gpio" + pin.gpioNum + "/direction", "out");
-					process.stderr.write("\n  direction OK;");
-				} catch (e) {
-					process.stderr.write("\n  direction FAIL: echo out > /sys/class/gpio/gpio" + pin.gpioNum + "/direction");
-					process.stderr.write("\n    " + e);
-				}
+echo Enabling PRUs using overlay...
+enableOverlay uio_pruss_enable
 
-				try {
-					writeSync("/sys/class/gpio/gpio" + pin.gpioNum + "/value", 0);
-					process.stderr.write("\n  value OK;");
-				} catch (e) {
-					process.stderr.write("\n  value FAIL: echo 0 > /sys/class/gpio/gpio" + pin.gpioNum + "/value");
-					process.stderr.write("\n    " + e);
-				}
+if modprobe uio_pruss; then
+	echo Loaded module uio_pruss
+else
+	echo ERROR: Failed to load module uio_pruss
+	exit -1
+fi
+`;
 
-				process.stderr.write("\n");
-			});
-		} else {
-			console.error("No /sys/class/gpio... Skipping pin setup.");
+			if (pinMapping.dtbName) {
+				const dtboSourceFilename = __dirname + "/../dts/" + pinMapping.dtbName + "-00A0.dtbo";
+				const dtboDestFilename = "/lib/firmware/" + pinMapping.dtbName + "-00A0.dtbo";
+
+				setupScript += `
+for CAPEMGR in ${capemgrDirectories.join(" ")}; do
+	if [ -d "$CAPEMGR" ]; then
+		if [ -e "${dtboSourceFilename}" ]; then
+			if [ -e "${dtboDestFilename}" ]; then
+				echo Overlay dtbo already exists: ${dtboDestFilename}
+			elif cp "${dtboSourceFilename}" "${dtboDestFilename}"; then
+				echo Copied overlay dtbo ${dtboSourceFilename} to ${dtboDestFilename}
+			else
+				echo ERROR: Failed to copy overlay dtbo from ${dtboSourceFilename} to ${dtboDestFilename}
+				exit -1
+			fi
+			
+			echo Mapping LEDscape pins using overlay...
+			enableOverlay ${pinMapping.dtbName}
+		fi
+		exit 0
+	fi
+done
+
+echo ERROR: Failed to find a bone_capemgr in /sys/
+exit -1
+					`;
+			} else {
+				setupScript += `if [ -d /sys/class/gpio ]; then\n`;
+
+				usedPins.forEach(
+					function (pin) {
+						setupScript += `    echo 'Setting up channel ${pin.mappedChannelIndex} (pin ${pin.headerName})'\n`;
+						setupScript += `    echo ${pin.gpioNum} >> /sys/class/gpio/export\n`;
+						setupScript += `    echo out >> /sys/class/gpio/gpio${pin.gpioNum}/direction\n`;
+						setupScript += `    echo 0 >> /sys/class/gpio/gpio${pin.gpioNum}/value\n`;
+					}
+				);
+
+				setupScript += `
+				else
+					echo ERROR: No /sys/class/gpio found.
+					exit -1
+				fi
+				`;
+
+			}
+
+			(setupScript as any).to(setupScriptPath);
 		}
+
+		buildSetupScript();
 
 		console.info("PRU0:", pru0Result.binFile);
 		console.info("PRU1:", pru1Result.binFile);

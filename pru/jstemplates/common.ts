@@ -251,16 +251,16 @@ export abstract class BasePruProgram {
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	protected r0  = new PruWholeRegister(0 );
-	protected r1  = new PruWholeRegister(1 );
-	protected r2  = new PruWholeRegister(2 );
-	protected r3  = new PruWholeRegister(3 );
-	protected r4  = new PruWholeRegister(4 );
-	protected r5  = new PruWholeRegister(5 );
-	protected r6  = new PruWholeRegister(6 );
-	protected r7  = new PruWholeRegister(7 );
-	protected r8  = new PruWholeRegister(8 );
-	protected r9  = new PruWholeRegister(9 );
+	protected r0  = new PruWholeRegister( 0);
+	protected r1  = new PruWholeRegister( 1);
+	protected r2  = new PruWholeRegister( 2);
+	protected r3  = new PruWholeRegister( 3);
+	protected r4  = new PruWholeRegister( 4);
+	protected r5  = new PruWholeRegister( 5);
+	protected r6  = new PruWholeRegister( 6);
+	protected r7  = new PruWholeRegister( 7);
+	protected r8  = new PruWholeRegister( 8);
+	protected r9  = new PruWholeRegister( 9);
 	protected r10 = new PruWholeRegister(10);
 	protected r11 = new PruWholeRegister(11);
 	protected r12 = new PruWholeRegister(12);
@@ -482,6 +482,21 @@ export abstract class BasePruProgram {
 	}
 
 	/**
+	 * Checks if the given pin is zero, and clears the corresponding r30 bit in the given register.
+	 *
+	 * @param pin The pin whose bit should be tested
+	 * @param r30Reg Register where the R30 bit should be set.
+	 */
+	protected TEST_BIT_ZERO_R30(pin: BbbPinInfo, r30Reg: PruRegister = this.r_temp2) {
+		var label_name = "channel_" + pin.pruDataChannel + "_zero_skip";
+
+		this.emitComment("Test if pin (pruDataChannel=" + pin.pruDataChannel + ", global="+pin.dataChannelIndex+") is ZERO and SET bit " + pin.r30bit + " in " + r30Reg + " for use with r30");
+		this.QBBS(label_name, this.r_datas[pin.dataChannelIndex], this.r_bit_num);
+		this.CLR(r30Reg, r30Reg, pin.r30bit);
+		this.emitLabel(label_name, true);
+	}
+
+	/**
 	 * Checks if the bit indexed by the r_bit_num register in the regN register is a zero, and if so, sets the bit in the
 	 * corresponding _zeros register. CHANNEL_BANK_NAME and CHANNEL_BIT are used to lookup the bank and bit num.
 	 *
@@ -529,6 +544,18 @@ export abstract class BasePruProgram {
 			firstPin.dataChannelIndex*4 + firstChannel*4,
 			channelCount*4
 		);
+	}
+
+	protected PREP_GPIO_MASK_FOR_PINS_R30(pins: BbbPinInfo[], reg: PruRegister = this.r_temp1) {
+		this.emitComment("Set " + reg + " with a mask for setting or clearing channels " + pins.map(this.shortNameForPin).join(", "));
+
+		var mask = 0;
+
+		pins.forEach((pin) => {
+			mask |= 1 << pin.r30bit;
+		});
+
+		this.MOV(reg, this.toHexLiteral(mask));
 	}
 
 	protected PREP_GPIO_MASK_FOR_PINS(pins: BbbPinInfo[]) {
@@ -593,6 +620,18 @@ export abstract class BasePruProgram {
 				this.APPLY_GPIO_CHANGES();
 			});
 		});
+	}
+
+	protected PINS_LOW_R30(pins: BbbPinInfo[], pinsLabel?: string) {
+		this.emitComment((pinsLabel || "") + ' Pins LOW: ' + pins.map(this.shortNameForPin).join(", "));
+		this.MOV(this.r_temp2, this.toHexLiteral(0xFFFFFFFF ^ pins.map(p => 1 << p.r30bit).reduce((a,b) => a|b)));
+		this.AND(this.r30, this.r30, this.r_temp2);
+	}
+
+	protected PINS_HIGH_R30(pins: BbbPinInfo[], pinsLabel?: string) {
+		this.emitComment((pinsLabel || "") + ' Pins LOW: ' + pins.map(this.shortNameForPin).join(", "));
+		this.MOV(this.r_temp2, this.toHexLiteral(pins.map(p => 1 << p.r30bit).reduce((a,b) => a|b)));
+		this.OR(this.r30, this.r30, this.r_temp2);
 	}
 
 	protected PINS_LOW(pins: BbbPinInfo[], pinsLabel?: string) {
