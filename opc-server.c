@@ -26,6 +26,8 @@
 #include "lib/cesanta/net_skeleton.h"
 #include "lib/cesanta/frozen.h"
 
+#include "status-monitor.h"
+
 #include <pthread.h>
 #include <stdbool.h>
 
@@ -116,6 +118,7 @@ void rotate_frames(uint8_t lock_frame_data);
 
 // Threads
 void* render_thread(void* threadarg);
+void* status_thread(void* threadarg);
 void* udp_server_thread(void* threadarg);
 void* tcp_server_thread(void* threadarg);
 void* e131_server_thread(void* threadarg);
@@ -340,6 +343,7 @@ static struct
 	thread_state_lt udp_server_thread;
 	thread_state_lt e131_server_thread;
 	thread_state_lt demo_thread;
+	thread_state_lt status_thread;
 } g_threads = {
 	{NULL, false, false},
 	{NULL, false, false},
@@ -705,6 +709,7 @@ int main(int argc, char ** argv)
 	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
 	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
 	pthread_create(&g_threads.e131_server_thread, NULL, e131_server_thread, NULL);
+	pthread_create(&g_threads.status_thread, NULL, status_thread, NULL);
 
 	if (g_server_config.demo_mode != DEMO_MODE_NONE) {
 		printf("[main] Demo Mode Enabled\n");
@@ -839,26 +844,6 @@ int validate_server_config(
 			);
 		}
 	}
-
-//	{ // outputMode and outputMapping
-//		for (int pruNum=0; pruNum < 2; pruNum++) {
-//			build_pruN_program_name(
-//				input_config->output_mode_name,
-//				input_config->output_mapping_name,
-//				pruNum,
-//				path_temp,
-//				sizeof(path_temp)
-//			);
-//
-//			if( access( path_temp, R_OK ) == -1 ) {
-//				add_error(
-//					"\n\t\t\"" "Invalid mapping and/or mode name; cannot access PRU %d program '%s'" "\",",
-//					pruNum,
-//					path_temp
-//				);
-//			}
-//		}
-//	}
 
 	// demoMode
 	assert_enum_valid("Demo Mode", input_config->demo_mode);

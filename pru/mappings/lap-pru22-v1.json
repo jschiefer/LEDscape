@@ -1,7 +1,7 @@
 {
-	"id": "lap-pru24-v1",
-	"name": "Light at Play - 22 output cape",
-	"description": "Mapping for Light at Play - 22 output cape",
+	"id": "lap-pru22-v3",
+	"name": "Light at Play - 22 output cape with status",
+	"description": "Mapping for Light at Play - 22 output cape with status",
 	"dtbName": "BB-LEDSCAPE22",
 	"maxChannelCount": 22,
 
