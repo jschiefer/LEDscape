@@ -185,7 +185,7 @@ FRAME_DONE:
 
 	// Delay at least 50 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.
-	SLEEPNS 50000, 1, reset_time
+	SLEEPNS 3000000, 1, reset_time
 
 	// Write out that we are done!
 	// Store a non-zero response in the buffer so that they know that we are done
