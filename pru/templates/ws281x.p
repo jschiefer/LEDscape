@@ -154,9 +154,11 @@ l_word_loop:
 		//WAITNS 600, wait_T1L_time
 
 		RESET_COUNTER	
-		GPIO_APPLY_MASK_TO_ADDR()	
+		//GPIO_APPLY_MASK_TO_ADDR()	
 
-		//APPLY_GPIO_MASK_TO_ADDR( 0 )
+		APPLY_GPIO_TO_ADDR( mask  , 0 )
+		APPLY_GPIO_TO_ADDR( mask , 1 )
+
 		// All bits are now high
 
 		// Get ready to drive the 0 outputs low
@@ -167,7 +169,8 @@ l_word_loop:
 
 		// Now we go low on any bits that are 0
 		// The 1 bits stay high
-		GPIO_APPLY_ZEROS_TO_ADDR()	
+		APPLY_GPIO_TO_ADDR( zeros , 0 )
+
 
 		// Now wait for T1H
 		WAITNS 600, LOOP2

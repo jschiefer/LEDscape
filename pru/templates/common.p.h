@@ -253,11 +253,12 @@ lab:
 // ***************************************
 
 
+// Which set of gpio register bits (ones, zeros, mask) ? To which gpio bank (0-3)?
+#define APPLY_GPIO_TO_ADDR( which , gpioNum ) SBBO r_gpio ## gpioNum ## _ ## which ## , r_gpio ## gpioNum ## _addr, 0, 4;
 
-//#define APPLY_GPIO_MASK_TO_ADDR( gpioNum ) SBBO r_gpio ## gpioNum ## _mask, r_gpio ## gpioNum ## _addr, 0, 4;
 
-//#define APPLY_GPIO_MASK_TO_ADDR( gpioNum ) SBBO r_gpio0_mask, r_gpio0_addr, 0, 4;
-
+// Defines below could be rewritten with general case above but I do nt want to mess with it since I only care about WS2128B 
+// and these below are no longer needed there. -josh
 
 #define PREP_GPIO_ADDRS_FOR_CLEAR()     MOV r_gpio0_addr, GPIO0 | GPIO_CLEARDATAOUT; \
                                         MOV r_gpio1_addr, GPIO1 | GPIO_CLEARDATAOUT; \
