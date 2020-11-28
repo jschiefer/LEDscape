@@ -252,6 +252,13 @@ lab:
 // *         LED Mapping Macros          *
 // ***************************************
 
+
+
+//#define APPLY_GPIO_MASK_TO_ADDR( gpioNum ) SBBO r_gpio ## gpioNum ## _mask, r_gpio ## gpioNum ## _addr, 0, 4;
+
+//#define APPLY_GPIO_MASK_TO_ADDR( gpioNum ) SBBO r_gpio0_mask, r_gpio0_addr, 0, 4;
+
+
 #define PREP_GPIO_ADDRS_FOR_CLEAR()     MOV r_gpio0_addr, GPIO0 | GPIO_CLEARDATAOUT; \
                                         MOV r_gpio1_addr, GPIO1 | GPIO_CLEARDATAOUT; \
                                         MOV r_gpio2_addr, GPIO2 | GPIO_CLEARDATAOUT; \
@@ -267,20 +274,23 @@ lab:
                                         MOV r_gpio2_mask, GPIO_MASK(2, maskName); \
                                         MOV r_gpio3_mask, GPIO_MASK(3, maskName);
 
-#define GPIO_APPLY_MASK_TO_ADDR()       SBBO r_gpio0_mask, r_gpio0_addr, 0, 4; \
-                                        SBBO r_gpio1_mask, r_gpio1_addr, 0, 4; \
-                                        SBBO r_gpio2_mask, r_gpio2_addr, 0, 4; \
-                                        SBBO r_gpio3_mask, r_gpio3_addr, 0, 4;
+#define GPIO_APPLY_MASK_TO_ADDR()       SBBO r_gpio2_mask, r_gpio2_addr, 0, 4; \
+					SBBO r_gpio1_mask, r_gpio1_addr, 0, 4; \
+					SBBO r_gpio3_mask, r_gpio3_addr, 0, 4; \
+					SBBO r_gpio0_mask, r_gpio0_addr, 0, 4; 
+
+
+#define GPIO_APPLY_ONES_TO_ADDR()       SBBO r_gpio2_ones, r_gpio2_addr, 0, 4; \	
+					SBBO r_gpio1_ones, r_gpio1_addr, 0, 4; \
+					SBBO r_gpio3_ones, r_gpio3_addr, 0, 4; \
+					SBBO r_gpio0_ones, r_gpio0_addr, 0, 4;
+
                                         
-#define GPIO_APPLY_ZEROS_TO_ADDR()      SBBO r_gpio0_zeros, r_gpio0_addr, 0, 4; \
-                                        SBBO r_gpio1_zeros, r_gpio1_addr, 0, 4; \
-                                        SBBO r_gpio2_zeros, r_gpio2_addr, 0, 4; \
-                                        SBBO r_gpio3_zeros, r_gpio3_addr, 0, 4;
+#define GPIO_APPLY_ZEROS_TO_ADDR()      SBBO r_gpio2_zeros, r_gpio2_addr, 0, 4; \	
+					SBBO r_gpio1_zeros, r_gpio1_addr, 0, 4; \
+					SBBO r_gpio3_zeros, r_gpio3_addr, 0, 4; \
+					SBBO r_gpio0_zeros, r_gpio0_addr, 0, 4;
                                         
-#define GPIO_APPLY_ONES_TO_ADDR()       SBBO r_gpio0_ones, r_gpio0_addr, 0, 4; \
-                                        SBBO r_gpio1_ones, r_gpio1_addr, 0, 4; \
-                                        SBBO r_gpio2_ones, r_gpio2_addr, 0, 4; \
-                                        SBBO r_gpio3_ones, r_gpio3_addr, 0, 4;
 
 #define _IMPL_CONCAT2(a,b) a ## b
 #define CONCAT2(a,b) _IMPL_CONCAT2(a,b)
