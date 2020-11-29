@@ -23,12 +23,101 @@
 //
 //
 
-// Mapping lookup
-
 .origin 0
 .entrypoint START
 
 #include "common.p.h"
+
+
+
+// Send one full bit to the specified gpio bank (0-3)
+// Handles all the timing except...
+// 1. Timing between the end of the bit on the last bank and the start of the bit in the next bit of the 1st bank
+//     -This is assumed to be long enough between sets of calls
+// 2. Reset timing at the end of all bits. 
+//     -This is handled at the end of the frame after all bit are sent
+
+// Note that we need this becuase we have to handle each bank seporately. If we try to send all the bit starts on 
+// all the banks and then send all the bit stops on all the banks we find that occasionally the delays are long enough
+// that the bits get streach so that 0 bits get turned into 1 bits which causes white flashes on the display.
+// This technique takes a little longer per frame, but every bit is always correct.
+
+
+#define HOLD(x) x
+#define UNHOLD(x) x
+
+// Assumes that gpio mask registers and gpio zero register are all set up. 
+
+#define 
+
+
+#define SEND_LED_BIT_ARRAY_TO_GPIO_BANK(bank) \
+	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_SETDATAOUT;  	\		
+	MOV r_gpio_temp_mask, CONCAT3( pru0_gpio , bank ,  _all_mask ); 	\
+	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			\
+	NOP; NOP; NOP;								\
+	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_CLEARDATAOUT;  	\		
+	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			
+
+
+	
+
+						\
+		// Load the gpio address registers with the address that sets a bit when written to	\
+		// so when we write a 1 the pins will go high 						\
+		// PREP_GPIO_ADDR_FOR_SET whichbank 							\
+		MOV CONCAT3(r_gpio , bank , _addr), GPIO0 | GPIO_SETDATAOUT; 
+	
+
+		.macro XXX
+		// load the mask register with 1s where ever there is a pin that we control
+		// We can not just send 1s on all gpios becuase other applications might be using other ones. 
+		//PREP_A_GPIO_MASK_NAMED whichbank , all
+
+		// OK, everything is ready for us to send the start of all the bits
+
+		// Wait until T1L to make sure previuous bit is done. 
+
+		// send high on all pins we controll 
+		//APPLY_GPIO_TO_ADDR mask , whichbank 
+
+		// All bits are now high
+
+		// Get ready to drive the outputs low whenever we write a 1 bit to the address regerster
+		//PREP_GPIO_ADDR_FOR_CLEAR whichbank 
+
+		// Wait for T0H
+		//WAITNS 350, LOOP1
+		NOP
+		NOP
+		NOP
+		NOP
+		NOP	
+		NOP
+
+		// Now we go low on any bits that are 0. These will be set as 1 in the "zeros" registers
+		// by code that runs on each pass in an enclosing loop that calls this macro. 
+
+		// The 1 bits stay high
+		//APPLY_GPIO_TO_ADDR zeros , whichbank 
+
+
+		// Now wait for T1H
+		//WAITNS 600, LOOP2
+
+		NOP
+		NOP
+		NOP
+		NOP
+		NOP
+		NOP
+		NOP
+
+		// And finally set all outputs to low
+		//APPLY_GPIO_TO_ADDR mask  , whichbank 
+
+.endm
+
 
 START:
 	// Enable OCP master port
@@ -143,68 +232,14 @@ l_word_loop:
 
 		// OK, now all the gpio_zeros have a 1 for each GPIO bit that should be set to 0 in the middle of this signal
 
-		// Load the gpio address registers with the address that sets a bit when written to		
-		PREP_GPIO_ADDRS_FOR_SET()
-		PREP_GPIO_MASK_NAMED(all)
+		//HALT		
 
-		// OK, everything is ready for us to send the start of all the bits
+		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 0 )
+		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 1 )
 
-		// Wait until T1L to make sure previuous bit is done. 
-
-		//WAITNS 600, wait_T1L_time
-
-		RESET_COUNTER	
-		//GPIO_APPLY_MASK_TO_ADDR()	
-
-		APPLY_GPIO_TO_ADDR( mask  , 0 )
-		APPLY_GPIO_TO_ADDR( mask , 1 )
-
-		// All bits are now high
-
-		// Get ready to drive the 0 outputs low
-		PREP_GPIO_ADDRS_FOR_CLEAR()
-
-		// Wait for T0H
-		WAITNS 350, LOOP1
-
-		// Now we go low on any bits that are 0
-		// The 1 bits stay high
-		APPLY_GPIO_TO_ADDR( zeros , 0 )
-
-
-		// Now wait for T1H
-		WAITNS 600, LOOP2
-
-		// And finally set all outputs to low
-		GPIO_APPLY_MASK_TO_ADDR()
-
-/*
-		PREP_GPIO_ADDRS_FOR_SET()
-		GPIO_APPLY_MASK_TO_ADDR()		
-
-		// Now get ready to make all the 0 bits go low
-
-		PREP_GPIO_ADDRS_FOR_CLEAR()
-		// Remeber that the _zeros already have a 1 everywhere where we need to clear the output put
-
-		// Ok, now we will wait until T0H it is time for the 0 bits to go low...
-
-		WAITNS 600+350, wait_T0H_time
-
-		GPIO_APPLY_ZEROS_TO_ADDR()
-		// OK, now the pins that are getting a data 1 are still high
-		// next we will make all these pins go low by putting the mask on the CLEAR bits
-
-		PREP_GPIO_ADDRS_FOR_CLEAR()
-
-		// OK, now we will wait until T1H until it is time for the 1 bits (the rest) to go low....
-
-		WAITNS 600+350+(700-350), wait_T1H_time
-
-		GPIO_APPLY_MASK_TO_ADDR()
-*/
-
-		// That bit is done, so start counting now for the next bit. THis gives us time
+		//HALT
+				
+		// That group of bits is done, so start counting now for the next bit. THis gives us time
 		// to do stuff in between bit when timing is not critical
 		//RESET_COUNTER
 
