@@ -92,21 +92,25 @@ l:
 
 
 	//MOV r_temp1, 0x8000000
-	MOV r_temp1, 0x8000008
+//	MOV r_temp1, 0x8000008
 
-	AND r_gpio_temp_mask , r_gpio_temp_mask , r_temp1
+//	AND r_gpio_temp_mask , r_gpio_temp_mask , r_temp1
 
-	MOV r_gpio_temp_mask , 0x208
+	MOV r_gpio_temp_mask , 1<<25 | 1 << 9 | 1 <<3 ;
+
+//	MOV r_gpio_temp_mask , 1<<3 ;
+
+
 //	MOV r_gpio_temp_mask , 0x08
 
 
-	SBBO r_gpio_temp_mask , r_gpio0_addr , 0 , 2;			
+	SBBO r_gpio_temp_mask , r_gpio0_addr , 0 , 4;			
 
 	PAUSE_NS 250;
 
-	SBBO r_gpio_temp_mask , r_gpio1_addr , 0 , 2;	
+	SBBO r_gpio_temp_mask , r_gpio1_addr , 0 , 4;	
 
-	PAUSE_NS 400;
+	PAUSE_NS 2000;
 
 
 .endm
