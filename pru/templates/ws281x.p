@@ -26,8 +26,9 @@
 .origin 0
 .entrypoint START
 
-#include "common.p.h"
 
+
+#include "common.p.h"
 
 
 // Send one full bit to the specified gpio bank (0-3)
@@ -43,30 +44,68 @@
 // This technique takes a little longer per frame, but every bit is always correct.
 
 
-#define HOLD(x) x
-#define UNHOLD(x) x
+// Pause nanoseconds by spinning in place
+
+	.macro PAUSE_NS
+	.mparam ns
+	MOV r_sleep_counter, (ns/10)-1
+l:
+	SUB r_sleep_counter, r_sleep_counter, 1
+	QBNE l, r_sleep_counter, 0
+	.endm
+
 
 // Assumes that gpio mask registers and gpio zero register are all set up. 
 
-#define 
+.macro SEND_BIT_TO_GPIO_BANK
+	.mparam gpio_addr,mask_const,zerobits_reg
+	MOV r_gpio_temp_addr, gpio_addr | GPIO_SETDATAOUT;  	
+	MOV r_gpio_temp_mask, mask_const; 	
+	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			
+	PAUSE_NS 300;								
+
+	MOV r_gpio_temp_addr, gpio_addr | GPIO_CLEARDATAOUT;  	
+	SBBO zerobits_reg , r_gpio_temp_addr , 0, 4;	
+	PAUSE_NS 200;								
+
+	MOV r_gpio_temp_mask, mask_const; 	
+	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;
+.endm
 
 
-#define SEND_LED_BIT_ARRAY_TO_GPIO_BANK(bank) \
-	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_SETDATAOUT;  	\		
+.macro SEND_PULSE_TO_GPIO_BANK
+	.mparam gpio_addr,mask_const
+	MOV r_gpio_temp_addr, gpio_addr | GPIO_SETDATAOUT;  	
+	MOV r_gpio_temp_mask, mask_const; 	
+	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			
+	PAUSE_NS 50;								
+
+	MOV r_gpio_temp_addr, gpio_addr | GPIO_CLEARDATAOUT;  	
+	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;	
+.endm
+
+
+
+/*
+#define SEND_LED_BIT_ARRAY_TO_GPIO_BANK(gpio_addr,mask_const,zerobits_reg) 					\
+	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_SETDATAOUT;  	\
 	MOV r_gpio_temp_mask, CONCAT3( pru0_gpio , bank ,  _all_mask ); 	\
 	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			\
-	NOP; NOP; NOP;								\
-	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_CLEARDATAOUT;  	\		
-	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			
-
+	PAUSE_NS 400;								\
+	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_CLEARDATAOUT;  	\
+	SBBO CONCAT3( r_gpio , bank ,  _zeros ) , r_gpio_temp_addr , 0, 4;	\
+	PAUSE_NS 200;								\
+	MOV r_gpio_temp_mask, CONCAT3( pru0_gpio , bank ,  _all_mask ); 	\
+	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;
+*/
 
 	
 
-						\
+						
 		// Load the gpio address registers with the address that sets a bit when written to	\
 		// so when we write a 1 the pins will go high 						\
 		// PREP_GPIO_ADDR_FOR_SET whichbank 							\
-		MOV CONCAT3(r_gpio , bank , _addr), GPIO0 | GPIO_SETDATAOUT; 
+		//MOV CONCAT3(r_gpio , bank , _addr), GPIO0 | GPIO_SETDATAOUT; 
 	
 
 		.macro XXX
@@ -88,12 +127,6 @@
 
 		// Wait for T0H
 		//WAITNS 350, LOOP1
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP	
-		NOP
 
 		// Now we go low on any bits that are 0. These will be set as 1 in the "zeros" registers
 		// by code that runs on each pass in an enclosing loop that calls this macro. 
@@ -105,21 +138,15 @@
 		// Now wait for T1H
 		//WAITNS 600, LOOP2
 
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
 
 		// And finally set all outputs to low
 		//APPLY_GPIO_TO_ADDR mask  , whichbank 
-
-.endm
+		.endm
 
 
 START:
+
+
 	// Enable OCP master port
 	// clear the STANDBY_INIT bit in the SYSCFG register,
 	// otherwise the PRU will not be able to write outside the
@@ -180,6 +207,17 @@ _LOOP:
 	// this gives us lots of time to work on each subsequent cycle
 	RESET_COUNTER
 
+// Check wea re the right PRU
+
+	MOV r1, PRU_NUM
+	QBNE we_are_pru0 , r1 , 1
+	
+	HALT
+
+we_are_pru0:
+
+
+
 
 l_word_loop:
 	// for bit in 24 to 0
@@ -189,7 +227,7 @@ l_word_loop:
 		DECREMENT r_bit_num
 
 		// Load 16 registers of data, starting at r10
-		LOAD_CHANNEL_DATA(24, 0, 16)
+		//LOAD_CHANNEL_DATA(24, 0, 16)
 
 		// Zero out the registers
 		// r_gpioX_zeros = 0x00
@@ -217,7 +255,7 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data15, 15)
 
 		// Load 8 more registers of data
-		LOAD_CHANNEL_DATA(24, 16, 8)
+		//LOAD_CHANNEL_DATA(24, 16, 8)
 		// Data loaded
 
 		// Test some more bits to pass the time
@@ -232,10 +270,29 @@ l_word_loop:
 
 		// OK, now all the gpio_zeros have a 1 for each GPIO bit that should be set to 0 in the middle of this signal
 
-		//HALT		
+
+loopy:
+
+		//SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
+
+		SEND_PULSE_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask
+
+
+/*
+		//SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 3 )
+		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 2 )
+		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 1 )
+		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 0 )
+		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 0 )
 
 		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 0 )
 		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 1 )
+		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 2 )
+*/
+		PAUSE_NS 10000		
+
+
+		jmp loopy
 
 		//HALT
 				
@@ -258,7 +315,7 @@ FRAME_DONE:
 
 	// Delay at least 300 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.	
-	SLEEPNS 300000, 1, reset_time
+	SLEEPNS 300000
 
 	// Write out that we are done!
 	// Store a non-zero response in the buffer so that they know that we are done

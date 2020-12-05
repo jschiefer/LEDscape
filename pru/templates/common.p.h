@@ -195,11 +195,12 @@
  * with things that must happen on a tight schedule.
  */
 .macro SLEEPNS
-.mparam ns,inst,lab
-	MOV r_sleep_counter, (ns/10)-1-inst // ws2811 -- high speed
-lab:
+.mparam ns
+	MOV r_sleep_counter, (ns/10)-1 // ws2811 -- high speed
+	NOP
+l:
 	SUB r_sleep_counter, r_sleep_counter, 1
-	QBNE lab, r_sleep_counter, 0
+	QBNE l, r_sleep_counter, 0
 .endm
 
 
@@ -379,9 +380,16 @@ lab:
  * @param regN The data register to check. Generally one of the r_dataN registers.
  * @param channelIndex Which channel this check is for. Used to determine GPIO bank and bit.
  */
+/*
 #define TEST_BIT_ZERO(regN,channelIndex) QBBS CONCAT3(channel_,channelIndex,_zero_skip), regN, r_bit_num; \
                                         SET CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_zeros), CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_zeros), CHANNEL_BIT(channelIndex); \
                                         CONCAT3(channel_,channelIndex,_zero_skip): ;
+*/
+
+#define TEST_BIT_ZERO(regN,channelIndex) QBBS CONCAT3(channel_,channelIndex,_zero_skip), regN, r_bit_num; \
+                                        SET CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_zeros), CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_zeros), CHANNEL_BIT(channelIndex); \
+                                        CONCAT3(channel_,channelIndex,_zero_skip): ;
+
 
 /**
  * Checks if the bit indexed by the r_bit_num register in the regN register is a one, and if so, sets the bit in the
