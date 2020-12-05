@@ -62,7 +62,7 @@ l:
 	MOV r_gpio_temp_addr, gpio_addr | GPIO_SETDATAOUT;  	
 	MOV r_gpio_temp_mask, mask_const; 	
 	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			
-	PAUSE_NS 300;								
+	PAUSE_NS 200;								
 
 	MOV r_gpio_temp_addr, gpio_addr | GPIO_CLEARDATAOUT;  	
 	SBBO zerobits_reg , r_gpio_temp_addr , 0, 4;	
@@ -75,18 +75,45 @@ l:
 
 .macro SEND_PULSE_TO_GPIO_BANK
 	.mparam gpio_addr,mask_const
-	MOV r_gpio_temp_addr, gpio_addr | GPIO_SETDATAOUT;  	
-	MOV r_gpio_temp_mask, mask_const; 	
-	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			
-	PAUSE_NS 50;								
+	MOV r_gpio0_addr, gpio_addr | GPIO_SETDATAOUT;  	
+	MOV r_gpio1_addr, gpio_addr | GPIO_CLEARDATAOUT; 
+//	MOV r_gpio0_addr, gpio_addr ;  	
+//	MOV r_gpio1_addr, gpio_addr ; 
 
-	MOV r_gpio_temp_addr, gpio_addr | GPIO_CLEARDATAOUT;  	
-	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;	
+
+	MOV r_gpio_temp_mask, mask_const; 
+
+//	LBBO r_temp1, r_gpio0_addr, 0 , 4
+//	LBBO r_temp1, r_gpio1_addr, 0 , 4
+
+	//MOV r_temp1, 0x00
+	//SBBO r_temp1 , r_gpio0_addr , 0, 4;	
+	//SBBO r_temp1 , r_gpio1_addr , 0, 4;	
+
+
+	//MOV r_temp1, 0x8000000
+	MOV r_temp1, 0x8000008
+
+	AND r_gpio_temp_mask , r_gpio_temp_mask , r_temp1
+
+	MOV r_gpio_temp_mask , 0x208
+//	MOV r_gpio_temp_mask , 0x08
+
+
+	SBBO r_gpio_temp_mask , r_gpio0_addr , 0 , 2;			
+
+	PAUSE_NS 250;
+
+	SBBO r_gpio_temp_mask , r_gpio1_addr , 0 , 2;	
+
+	PAUSE_NS 400;
+
+
 .endm
 
 
-
 /*
+
 #define SEND_LED_BIT_ARRAY_TO_GPIO_BANK(gpio_addr,mask_const,zerobits_reg) 					\
 	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_SETDATAOUT;  	\
 	MOV r_gpio_temp_mask, CONCAT3( pru0_gpio , bank ,  _all_mask ); 	\
@@ -97,8 +124,8 @@ l:
 	PAUSE_NS 200;								\
 	MOV r_gpio_temp_mask, CONCAT3( pru0_gpio , bank ,  _all_mask ); 	\
 	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;
-*/
 
+*/
 	
 
 						
@@ -207,17 +234,13 @@ _LOOP:
 	// this gives us lots of time to work on each subsequent cycle
 	RESET_COUNTER
 
-// Check wea re the right PRU
+	// Check we are the right PRU otherwise
+	// we will have mutlipule PRUs running the exact smae code competing with
+	// each other for access to the OCP bus.
 
 	MOV r1, PRU_NUM
-	QBNE we_are_pru0 , r1 , 1
+	QBNE SKIP_EVERYTHING , r1 , 0
 	
-	HALT
-
-we_are_pru0:
-
-
-
 
 l_word_loop:
 	// for bit in 24 to 0
@@ -275,7 +298,9 @@ loopy:
 
 		//SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
 
-		SEND_PULSE_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask
+		//SEND_PULSE_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask
+		//SEND_PULSE_TO_GPIO_BANK GPIO1, pru0_gpio1_all_mask
+		SEND_PULSE_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask
 
 
 /*
@@ -289,7 +314,7 @@ loopy:
 		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 1 )
 		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 2 )
 */
-		PAUSE_NS 10000		
+//		PAUSE_NS 300
 
 
 		jmp loopy
@@ -316,6 +341,8 @@ FRAME_DONE:
 	// Delay at least 300 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.	
 	SLEEPNS 300000
+
+SKIP_EVERYTHING:
 
 	// Write out that we are done!
 	// Store a non-zero response in the buffer so that they know that we are done
