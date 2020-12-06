@@ -373,10 +373,10 @@ l_word_loop:
 
 		// OK, now all the gpio_zeros have a 1 for each GPIO bit that should be set to 0 in the middle of this signal
 
-		MOV r_gpio0_zeros , 0xffffffff
-		MOV r_gpio1_zeros , 0x00000000
-		MOV r_gpio2_zeros , 0x00 | 1<<25
-		MOV r_gpio3_zeros , 0x00000000
+		//MOV r_gpio0_zeros , 0xffffffff
+		//MOV r_gpio1_zeros , 0x00000000
+		//MOV r_gpio2_zeros , 0x00 | 1<<25
+		//MOV r_gpio3_zeros , 0x00000000
 
 loopy:
 
@@ -443,7 +443,7 @@ loopy:
 //		PAUSE_NS 300
 
 
-		jmp loopy
+//		jmp loopy
 
 		//HALT
 				
