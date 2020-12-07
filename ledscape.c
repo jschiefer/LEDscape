@@ -1,4 +1,4 @@
-stop/** \file
+/*
  * Userspace interface to the WS281x LED strip driver.
  *
  */
