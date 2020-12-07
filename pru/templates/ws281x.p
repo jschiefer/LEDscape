@@ -19,9 +19,23 @@
 //        write out bits
 //    increment address by 32
 //
-
+// We are called with a struct in PRU shared RAM that looks like this...
 //
+// {
+//	// in the DDR shared with the PRU
+//	const uintptr_t pixels_dma;
 //
+//	// Length in pixels of the longest LED strip.
+//	unsigned num_pixels;
+//
+//	// write 1 to start, 0xFF to abort. will be cleared when started
+//	volatile unsigned command;
+//
+//	// will have a non-zero response written when done
+//	volatile unsigned response;
+//  }
+//
+//  This struct is 4 unsigned * 4 bytes/unsigned = 16 bytes long
 
 .origin 0
 .entrypoint START
@@ -45,10 +59,13 @@
 
 
 // Pause nanoseconds by spinning in place
+// Only accurate to next lowest ns multipule of 10 so 296ns will spin for 290ns and 300ns will spin for 300ns. 
+// Rewitten here as a macro becuase (unlike #defines) macros have local label scope
+// so we do not have to worry about specifying (or messing up) labels on each use. 
 
 	.macro PAUSE_NS
 	.mparam ns
-	MOV r_sleep_counter, (ns/10)-1
+	MOV r_sleep_counter, (ns/10)-1		// each loop iteration is 2 cycles, each cycle is 5ns (200Mhz). 1 cycle for this MOV. 
 l:
 	SUB r_sleep_counter, r_sleep_counter, 1
 	QBNE l, r_sleep_counter, 0
@@ -56,7 +73,7 @@ l:
 
 
 // Assumes that gpio mask registers and gpio zero register are all set up. 
-
+// FOR TESTING
 .macro SEND_BIT_TO_GPIO_BANK
 	.mparam gpio_addr,mask_const,zerobits_reg
 	MOV r_gpio_temp_addr, gpio_addr | GPIO_SETDATAOUT;  	
@@ -73,6 +90,8 @@ l:
 .endm
 
 
+
+// FOR TESTING 
 .macro SEND_PULSE_TO_GPIO_BANK
 	.mparam gpio_addr,mask_const
 	MOV r_gpio0_addr, gpio_addr | GPIO_SETDATAOUT;  	
@@ -116,145 +135,9 @@ l:
 .endm
 
 
-
-.macro SEND_PULSE_TO_GPIO_BANKAB
-	.mparam gpio_addrA,mask_constA,gpio_addrB,mask_constB
-	MOV r_gpio0_addr, gpio_addrA | GPIO_CLEARDATAOUT; 
-	MOV r_gpio1_addr, gpio_addrB | GPIO_CLEARDATAOUT; 
-
-	// We can overwrite the data regs now just for testing since this is a hard coded waveform
-	MOV r_data0, mask_constA; 
-	MOV r_data1, mask_constB; 
-
-	SBBO r_data0 , r_gpio0_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
-	SBBO r_data1 , r_gpio1_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
-
-	PAUSE_NS 250;
-
-	MOV r_data0, 0x08; 
-	MOV r_data1, 0x08; 
-
-	SBBO r_data0 , r_gpio0_addr , 0 , 4;			
-	SBBO r_data1 , r_gpio1_addr , 0 , 4;	
-
-	PAUSE_NS 350;
-		
-	MOV r_data0, mask_constA; 
-	MOV r_data1, mask_constB; 
-
-	SBBO r_data0 , r_gpio0_addr , 0 , 4;			
-	SBBO r_data1 , r_gpio1_addr , 0 , 4;			
-
-	PAUSE_NS 200;
-
-
-.endm
-
-// You think you could make this look nice by breaking it into lines, but you can not with this ASM 
-
-/*
-
-.macro SEND_PULSE_TO_GPIO_BANKABCD
-	.mparam gpio_addrA,mask_constA,zeros_regA , gpio_addrB,mask_constB,zeros_regB,	gpio_addrC,mask_constC,zeros_regC, gpio_addrD,mask_constD,zeros_regD
-
-
-	MOV r_gpio0_addr, gpio_addrA | GPIO_CLEARDATAOUT; 
-	MOV r_gpio1_addr, gpio_addrB | GPIO_CLEARDATAOUT; 
-	MOV r_gpio2_addr, gpio_addrC | GPIO_CLEARDATAOUT; 
-	MOV r_gpio3_addr, gpio_addrD | GPIO_CLEARDATAOUT; 
-
-	// We can overwrite the data regs now just for testing since this is a hard coded waveform
-	MOV r_data0, mask_constA; 
-	MOV r_data1, mask_constB; 
-	MOV r_data2, mask_constC; 
-	MOV r_data3, mask_constD; 
-
-	SBBO zeros_regA , r_gpio0_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
-	SBBO zeros_regB , r_gpio1_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
-	SBBO zeros_regC , r_gpio2_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
-	SBBO zeros_regD , r_gpio3_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
-
-	PAUSE_NS 250;
-
-	SBBO r_data0 , r_gpio0_addr , 0 , 4;			
-	SBBO r_data1 , r_gpio1_addr , 0 , 4;	
-	SBBO r_data2 , r_gpio2_addr , 0 , 4;			
-	SBBO r_data3 , r_gpio3_addr , 0 , 4;	
-
-	PAUSE_NS 250;
-		
-	SBBO r_data0 , r_gpio0_addr , 0 , 4;			
-	SBBO r_data1 , r_gpio1_addr , 0 , 4;			
-
-	PAUSE_NS 450;
-
-.endm
-
-*/
-
-/*
-
-#define SEND_LED_BIT_ARRAY_TO_GPIO_BANK(gpio_addr,mask_const,zerobits_reg) 					\
-	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_SETDATAOUT;  	\
-	MOV r_gpio_temp_mask, CONCAT3( pru0_gpio , bank ,  _all_mask ); 	\
-	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			\
-	PAUSE_NS 400;								\
-	MOV r_gpio_temp_addr, CONCAT2( GPIO , bank) | GPIO_CLEARDATAOUT;  	\
-	SBBO CONCAT3( r_gpio , bank ,  _zeros ) , r_gpio_temp_addr , 0, 4;	\
-	PAUSE_NS 200;								\
-	MOV r_gpio_temp_mask, CONCAT3( pru0_gpio , bank ,  _all_mask ); 	\
-	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;
-
-*/
-	
-
-						
-		// Load the gpio address registers with the address that sets a bit when written to	\
-		// so when we write a 1 the pins will go high 						\
-		// PREP_GPIO_ADDR_FOR_SET whichbank 							\
-		//MOV CONCAT3(r_gpio , bank , _addr), GPIO0 | GPIO_SETDATAOUT; 
-	
-
-		.macro XXX
-		// load the mask register with 1s where ever there is a pin that we control
-		// We can not just send 1s on all gpios becuase other applications might be using other ones. 
-		//PREP_A_GPIO_MASK_NAMED whichbank , all
-
-		// OK, everything is ready for us to send the start of all the bits
-
-		// Wait until T1L to make sure previuous bit is done. 
-
-		// send high on all pins we controll 
-		//APPLY_GPIO_TO_ADDR mask , whichbank 
-
-		// All bits are now high
-
-		// Get ready to drive the outputs low whenever we write a 1 bit to the address regerster
-		//PREP_GPIO_ADDR_FOR_CLEAR whichbank 
-
-		// Wait for T0H
-		//WAITNS 350, LOOP1
-
-		// Now we go low on any bits that are 0. These will be set as 1 in the "zeros" registers
-		// by code that runs on each pass in an enclosing loop that calls this macro. 
-
-		// The 1 bits stay high
-		//APPLY_GPIO_TO_ADDR zeros , whichbank 
-
-
-		// Now wait for T1H
-		//WAITNS 600, LOOP2
-
-
-		// And finally set all outputs to low
-		//APPLY_GPIO_TO_ADDR mask  , whichbank 
-		.endm
-
-
 START:
 
-
-	// Enable OCP master port
+	// Enable OCP master port. This lets the PRU get to the gpio bank registers in the ARM memory space. 
 	// clear the STANDBY_INIT bit in the SYSCFG register,
 	// otherwise the PRU will not be able to write outside the
 	// PRU memory space and to the BeagleBon's pins.
@@ -309,18 +192,21 @@ _LOOP:
 	// Command of 0xFF is the signal to exit
 	QBEQ EXIT, r2, #0xFF
 
-	// Reset the cycle timer
-	// Doing tyhis here means that the first bit out will have to wait, but 
-	// this gives us lots of time to work on each subsequent cycle
-	RESET_COUNTER
+	// Reset the cycle counter. We use this at the end of the frame to report back to the 
+	// caller how many cycles it took us to send the last frame.
+	RESET_COUNTER;
+
 
 	// Check we are the right PRU otherwise
 	// we will have mutlipule PRUs running the exact smae code competing with
-	// each other for access to the OCP bus.
+	// each other for access to the OCP bus which is bad becuase then you occasionally
+	// get glitches when one PRU access comes after the other becuase of a L3/L4 delay. 
 
 	MOV r1, PRU_NUM
 	QBNE SKIP_EVERYTHING , r1 , 0
 	
+	// If we get here then we are running on PRU0 and we will be doing all the 
+	// pin twiddling
 
 l_word_loop:
 	// for bit in 24 to 0
@@ -330,7 +216,7 @@ l_word_loop:
 		DECREMENT r_bit_num
 
 		// Load 16 registers of data, starting at r10
-		//LOAD_CHANNEL_DATA(24, 0, 16)
+		LOAD_CHANNEL_DATA(24, 0, 16)
 
 		// Zero out the registers
 		// r_gpioX_zeros = 0x00
@@ -358,7 +244,7 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data15, 15)
 
 		// Load 8 more registers of data
-		//LOAD_CHANNEL_DATA(24, 16, 8)
+		LOAD_CHANNEL_DATA(24, 16, 8)
 		// Data loaded
 
 		// Test some more bits to pass the time
@@ -378,87 +264,68 @@ l_word_loop:
 		//MOV r_gpio2_zeros , 0x00 | 1<<25
 		//MOV r_gpio3_zeros , 0x00000000
 
-loopy:
-
-		//SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
-
-		//SEND_PULSE_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask
-		//SEND_PULSE_TO_GPIO_BANK GPIO1, pru0_gpio1_all_mask
-		//SEND_PULSE_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask
-
-		// SBBO can take a fixed offer to tbe address, so we load our addresses regisrters
+		// SBBO can take a fixed offset to the address, so we load our addresses regisrters
 		// with the address of the lower address (the CLEAR) and then offet from that to get the 
-		// higher one (the SET)
+		// higher one (the SET). This save 4 loads.
 
 		MOV r_gpio0_addr, GPIO0 | GPIO_CLEARDATAOUT; 
 		MOV r_gpio1_addr, GPIO1 | GPIO_CLEARDATAOUT; 
 		MOV r_gpio2_addr, GPIO2 | GPIO_CLEARDATAOUT; 
 		MOV r_gpio3_addr, GPIO3 | GPIO_CLEARDATAOUT; 
 
-		// We can overwrite the data regs now just for testing since this is a hard coded waveform
+		// The *_all_mask constants have a 1 bit for each pin that we should control. We can not just
+		// muck will all the pins in each gpio bank since other stuff might be using those other pins. 
+
+		// Load up 1's for all the pins that ledscape controls in each gpio bank
 		MOV r_data0, pru0_gpio0_all_mask; 
 		MOV r_data1, pru0_gpio1_all_mask; 
 		MOV r_data2, pru0_gpio2_all_mask; 
 		MOV r_data3, pru0_gpio3_all_mask; 
 
-		// SET all masked outputs high 
+		// SET all masked outputs high on all pins we control
 		// Both zero and one data bit waveforms start with pin going high 
 		SBBO r_data0 , r_gpio0_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
 		SBBO r_data1 , r_gpio1_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
 		SBBO r_data2 , r_gpio2_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
 		SBBO r_data3 , r_gpio3_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
 
+		// Wait T0H. This is the width of a 0 bit in the waveform going out the pins
 		PAUSE_NS 250;
 
-		// CLEAR any output that has bit set in zeros
+		// CLEAR the output (make pin low) that has bit set in zeros
 		// These will make this output waveform go low, making it into a short zero pulse
+		// Note that the *_zeros registers we set above based on the pixel data that was passed to
+		// us from the userspace process
 		SBBO r_gpio0_zeros , r_gpio0_addr , 0 , 4;			
 		SBBO r_gpio1_zeros , r_gpio1_addr , 0 , 4;	
 		SBBO r_gpio2_zeros , r_gpio2_addr , 0 , 4;			
 		SBBO r_gpio3_zeros , r_gpio3_addr , 0 , 4;	
 
+		// Wait T1H-T0H. The pins that did not get set low directly above are still hight, so 
+		// so leaving them high this additional time will make a 1 bit in the datastream waveform.
 		PAUSE_NS 250;
 		
-		// CLEAR all masked outputs high 
-		// Both zero and one data bit waveforms end with pin going low
+		// CLEAR all masked outputs (all pins we control set low).
+		// Both zero and one data bit waveforms end with pin going low. 
+		// This is the end of the waveform for the current bit. 
+		// Pins that are alreday low just stay low. 
 		SBBO r_data0 , r_gpio0_addr , 0 , 4;			
 		SBBO r_data1 , r_gpio1_addr , 0 , 4;	
 		SBBO r_data2 , r_gpio2_addr , 0 , 4;			
 		SBBO r_data3 , r_gpio3_addr , 0 , 4;	
 
-		PAUSE_NS 450;
+		// Wait TLD. THis is the time between sequential bits
+		//PAUSE_NS 450;
 
-
-/*
-		//SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 3 )
-		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 2 )
-		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 1 )
-		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 0 )
-		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 0 )
-
-		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 0 )
-		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 1 )
-		SEND_LED_BIT_ARRAY_TO_GPIO_BANK( 2 )
-*/
-//		PAUSE_NS 300
-
-
-//		jmp loopy
-
-		//HALT
-				
-		// That group of bits is done, so start counting now for the next bit. THis gives us time
-		// to do stuff in between bit when timing is not critical
-		//RESET_COUNTER
-
-		// The one bits are lowered in the next iteration of the loop
+		// Next iteration of the 24 bit loop
 		QBNE l_bit_loop, r_bit_num, 0
 
 	// The RGB streams have been clocked out
 	// Move to the next pixel on each row
+	// 48 strings per cycle, 4 bytes per pixel (stored RGBW, but we here ignore the W)
 	ADD r_data_addr, r_data_addr, 48 * 4
 	DECREMENT r_data_len
-	QBNE l_word_loop, r_data_len, #0
+	//QBNE l_word_loop, r_data_len, #0
 
 FRAME_DONE:
 
@@ -466,7 +333,7 @@ FRAME_DONE:
 
 	// Delay at least 300 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.	
-	SLEEPNS 300000
+	PAUSE_NS 30000
 
 SKIP_EVERYTHING:
 
@@ -476,6 +343,11 @@ SKIP_EVERYTHING:
 	// long it took to write out.
 	MOV r8, PRU_CONTROL_ADDRESS // control register
 	LBBO r2, r8, 0xC, 4
+	SBCO r2, CONST_PRUDRAM, 12, 4
+
+
+	// Write a 0x01 into the response field so that they know we're done with this frame
+	MOV r2, #0x01
 	SBCO r2, CONST_PRUDRAM, 12, 4
 
 	// Go back to waiting for the next frame buffer

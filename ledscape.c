@@ -1,4 +1,4 @@
-/** \file
+stop/** \file
  * Userspace interface to the WS281x LED strip driver.
  *
  */
@@ -115,16 +115,20 @@ ledscape_wait(
 {
 	while (1)
 	{
-		pru_wait_interrupt();
+		// Do not be tempted to wait on the interrupt here becuase there can be a race condition if 
+		// the response changes between when we check it and when we start waiting on the interrupt. 
+
+		//pru_wait_interrupt();
 
 		// printf("pru0: (%d,%d), pru1: (%d,%d)\n",
 		// 	leds->ws281x_0->command, leds->ws281x_0->response,
 		// 	leds->ws281x_1->command, leds->ws281x_1->response
 		// );
 
-//		usleep( 10000 ); 
-
 		if (leds->ws281x_0->response && leds->ws281x_1->response) return;
+
+		usleep( 10000 ); 
+		
 	}
 }
 
