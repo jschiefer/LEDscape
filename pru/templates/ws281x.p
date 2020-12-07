@@ -175,6 +175,8 @@ _LOOP:
 	// interrupt before sending another frame
 	RAISE_ARM_INTERRUPT
 
+	// This bit here loads the data from the API structure into 
+	// r0-r2 (there are 3 32 bit words)
 	// Load the pointer to the buffer from PRU DRAM into r0 and the
 	// length (in bytes-bit words) into r1.
 	// start command into r2
@@ -202,8 +204,8 @@ _LOOP:
 	// each other for access to the OCP bus which is bad becuase then you occasionally
 	// get glitches when one PRU access comes after the other becuase of a L3/L4 delay. 
 
-	MOV r1, PRU_NUM
-	QBNE SKIP_EVERYTHING , r1 , 0
+	MOV r_temp1, PRU_NUM
+	QBNE SKIP_EVERYTHING , r_temp1 , 0
 	
 	// If we get here then we are running on PRU0 and we will be doing all the 
 	// pin twiddling
@@ -259,10 +261,13 @@ l_word_loop:
 
 		// OK, now all the gpio_zeros have a 1 for each GPIO bit that should be set to 0 in the middle of this signal
 
-		//MOV r_gpio0_zeros , 0xffffffff
-		//MOV r_gpio1_zeros , 0x00000000
-		//MOV r_gpio2_zeros , 0x00 | 1<<25
-		//MOV r_gpio3_zeros , 0x00000000
+		/* 
+		// TESTING
+		MOV r_gpio0_zeros , 0xffffffff
+		MOV r_gpio1_zeros , 0xffffffff
+		MOV r_gpio2_zeros , 0xffffffff
+		MOV r_gpio3_zeros , 0x00000000
+		*/
 
 		// SBBO can take a fixed offset to the address, so we load our addresses regisrters
 		// with the address of the lower address (the CLEAR) and then offet from that to get the 
@@ -290,7 +295,7 @@ l_word_loop:
 		SBBO r_data3 , r_gpio3_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
 
 		// Wait T0H. This is the width of a 0 bit in the waveform going out the pins
-		PAUSE_NS 250;
+		PAUSE_NS 200;
 
 		// CLEAR the output (make pin low) that has bit set in zeros
 		// These will make this output waveform go low, making it into a short zero pulse
@@ -325,7 +330,7 @@ l_word_loop:
 	// 48 strings per cycle, 4 bytes per pixel (stored RGBW, but we here ignore the W)
 	ADD r_data_addr, r_data_addr, 48 * 4
 	DECREMENT r_data_len
-	//QBNE l_word_loop, r_data_len, #0
+	QBNE l_word_loop, r_data_len, #0
 
 FRAME_DONE:
 
@@ -333,7 +338,9 @@ FRAME_DONE:
 
 	// Delay at least 300 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.	
-	PAUSE_NS 30000
+
+	// Time TLL - latch data time
+	PAUSE_NS 300000
 
 SKIP_EVERYTHING:
 
