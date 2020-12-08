@@ -228,18 +228,19 @@ lab:
 .endm
 
 /** Reset the cycle counter */
+/* Clobbers r_temp_addr, r_temp2, and r9 */
 .macro RESET_COUNTER
 		// Disable the counter and clear it, then re-enable it
 		MOV r_temp_addr, PRU_CONTROL_ADDRESS // control register
-		LBBO r9, r_temp_addr, 0, 4
-		CLR r9, r9, 3 // disable counter bit
-		SBBO r9, r_temp_addr, 0, 4 // write it back
+		LBBO r_temp1, r_temp_addr, 0, 4
+		CLR r_temp1, r_temp1, 3 // disable counter bit
+		SBBO r_temp1, r_temp_addr, 0, 4 // write it back
 
 		MOV r_temp2, 0
 		SBBO r_temp2, r_temp_addr, 0xC, 4 // clear the timer
 
-		SET r9, r9, 3 // enable counter bit
-		SBBO r9, r_temp_addr, 0, 4 // write it back
+		SET r_temp1, r_temp1, 3 // enable counter bit
+		SBBO r_temp1, r_temp_addr, 0, 4 // write it back
 
 		// Read the current counter value
 		// Should be zero.

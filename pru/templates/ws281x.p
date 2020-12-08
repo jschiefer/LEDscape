@@ -75,19 +75,121 @@ l:
 // Assumes that gpio mask registers and gpio zero register are all set up. 
 // FOR TESTING
 .macro SEND_BIT_TO_GPIO_BANK
-	.mparam gpio_addr,mask_const,zerobits_reg
-	MOV r_gpio_temp_addr, gpio_addr | GPIO_SETDATAOUT;  	
-	MOV r_gpio_temp_mask, mask_const; 	
-	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;			
-	PAUSE_NS 200;								
+	.mparam gpio_addr_const,mask_const,zerobits_reg
 
-	MOV r_gpio_temp_addr, gpio_addr | GPIO_CLEARDATAOUT;  	
-	SBBO zerobits_reg , r_gpio_temp_addr , 0, 4;	
-	PAUSE_NS 200;								
+		// SBBO can take a fixed offset to the address, so we load our addresses regisrters
+		// with the address of the lower address (the CLEAR) and then offet from that to get the 
+		// higher one (the SET). This save 4 loads.
+		MOV r_gpio_temp_addr, gpio_addr_const | GPIO_CLEARDATAOUT; 
 
-	MOV r_gpio_temp_mask, mask_const; 	
-	SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0, 4;
+
+		// The *_all_mask constants have a 1 bit for each pin that we should control. We can not just
+		// muck will all the pins in each gpio bank since other stuff might be using those other pins. 
+
+		// Load up 1's for all the pins that ledscape controls in each gpio bank
+		MOV r_gpio_temp_mask, mask_const; 
+
+		// SET all masked outputs high on all pins we control
+		// Both zero and one data bit waveforms start with pin going high 
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+
+
+		// Wait T0H. This is the width of a 0 bit in the waveform going out the pins
+		PAUSE_NS 250;
+
+
+		// CLEAR the output (make pin low) that has bit set in zeros
+		// These will make this output waveform go low, making it into a short zero pulse
+		// Note that the *_zeros registers we set above based on the pixel data that was passed to
+		// us from the userspace process
+		SBBO zerobits_reg, r_gpio_temp_addr , 0 , 4;	
+
+		PAUSE_NS 250;
+
+
+/*
+
+		// Wait T1H-T0H. The pins that did not get set low directly above are still high, so 
+		// so leaving them high this additional time will make a 1 bit in the datastream waveform.
+		PAUSE_NS 300;
+		
+		// CLEAR all masked outputs (all pins we control set low).
+		// Both zero and one data bit waveforms end with pin going low. 
+		// This is the end of the waveform for the current bit. 
+		// Pins that are alreday low just stay low. 
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;			
+*/
 .endm
+
+.macro CLEAR_PINS_GPIO_BANK
+		.mparam gpio_addr_const,mask_const
+
+		MOV r_gpio_temp_addr, gpio_addr_const | GPIO_CLEARDATAOUT; 	
+
+		// Load up 1's for all the pins that ledscape controls in each gpio bank
+		MOV r_gpio_temp_mask, mask_const; 
+
+		// CLEAR all masked outputs (all pins we control set low).
+		// Both zero and one data bit waveforms end with pin going low. 
+		// This is the end of the waveform for the current bit. 
+		// Pins that are alreday low just stay low. 
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+
+		PAUSE_NS 200;
+			
+.endm
+
+/*
+		// SBBO can take a fixed offset to the address, so we load our addresses regisrters
+		// with the address of the lower address (the CLEAR) and then offet from that to get the 
+		// higher one (the SET). This save 4 loads.
+
+		MOV r_gpio0_addr, GPIO0 | GPIO_CLEARDATAOUT; 
+		MOV r_gpio1_addr, GPIO1 | GPIO_CLEARDATAOUT; 
+		MOV r_gpio2_addr, GPIO2 | GPIO_CLEARDATAOUT; 
+		MOV r_gpio3_addr, GPIO3 | GPIO_CLEARDATAOUT; 
+
+		// The *_all_mask constants have a 1 bit for each pin that we should control. We can not just
+		// muck will all the pins in each gpio bank since other stuff might be using those other pins. 
+
+		// Load up 1's for all the pins that ledscape controls in each gpio bank
+		MOV r_data0, pru0_gpio0_all_mask; 
+		MOV r_data1, pru0_gpio1_all_mask; 
+		MOV r_data2, pru0_gpio2_all_mask; 
+		MOV r_data3, pru0_gpio3_all_mask; 
+
+		// SET all masked outputs high on all pins we control
+		// Both zero and one data bit waveforms start with pin going high 
+	//	SBBO r_data0 , r_gpio0_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+	//	SBBO r_data1 , r_gpio1_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
+		SBBO r_data2 , r_gpio2_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+	//	SBBO r_data3 , r_gpio3_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
+
+		// Wait T0H. This is the width of a 0 bit in the waveform going out the pins
+		PAUSE_NS 200;
+
+		// CLEAR the output (make pin low) that has bit set in zeros
+		// These will make this output waveform go low, making it into a short zero pulse
+		// Note that the *_zeros registers we set above based on the pixel data that was passed to
+		// us from the userspace process
+	//	SBBO r_gpio0_zeros , r_gpio0_addr , 0 , 4;			
+	//	SBBO r_gpio1_zeros , r_gpio1_addr , 0 , 4;	
+		SBBO r_gpio2_zeros , r_gpio2_addr , 0 , 4;			
+		SBBO r_gpio3_zeros , r_gpio3_addr , 0 , 4;	
+
+		// Wait T1H-T0H. The pins that did not get set low directly above are still hight, so 
+		// so leaving them high this additional time will make a 1 bit in the datastream waveform.
+		PAUSE_NS 250;
+		
+		// CLEAR all masked outputs (all pins we control set low).
+		// Both zero and one data bit waveforms end with pin going low. 
+		// This is the end of the waveform for the current bit. 
+		// Pins that are alreday low just stay low. 
+		SBBO r_data0 , r_gpio0_addr , 0 , 4;			
+		SBBO r_data1 , r_gpio1_addr , 0 , 4;	
+		SBBO r_data2 , r_gpio2_addr , 0 , 4;			
+		SBBO r_data3 , r_gpio3_addr , 0 , 4;	
+*/
 
 
 
@@ -142,7 +244,7 @@ START:
 	// otherwise the PRU will not be able to write outside the
 	// PRU memory space and to the BeagleBon's pins.
 	LBCO	r0, C4, 4, 4
-	CLR		r0, r0, 4
+	CLR	r0, r0, 4
 	SBCO	r0, C4, 4, 4
 
 	// Configure the programmable pointer register for PRU0 by setting
@@ -163,29 +265,26 @@ START:
 	MOV r2, #0x1
 	SBCO r2, CONST_PRUDRAM, 12, 4
 
-
-	MOV r20, 0xFFFFFFFF
-
 	// Wait for the start condition from the main program to indicate
 	// that we have a rendered frame ready to clock out.  This also
 	// handles the exit case if an invalid value is written to the start
 	// start position.
 _LOOP:
+
 	// Let ledscape know that we're starting the loop again. It waits for this
 	// interrupt before sending another frame
 	RAISE_ARM_INTERRUPT
 
-	// This bit here loads the data from the API structure into 
-	// r0-r2 (there are 3 32 bit words)
-	// Load the pointer to the buffer from PRU DRAM into r0 and the
-	// length (in bytes-bit words) into r1.
-	// start command into r2
+	// This bit here loads the data from the API structure into ...
+	// r_data_addr (r0) 	= pointer to the array of pixel data
+	// r_data_len  (r1) 	= number of 48 byte rows in the pixel array above
+	// r2			= API command where any non-zero tells us to start sending pixels
 	LBCO      r_data_addr, CONST_PRUDRAM, 0, 12
 
 	// Wait for a non-zero command
 	QBEQ _LOOP, r2, #0
 
-	// Zero out the start command so that they know we have received it
+	// Zero out the start command in the shared RAM so that they know we have received it
 	// This allows maximum speed frame drawing since they know that they
 	// can now swap the frame buffer pointer and write a new start command.
 	MOV r3, 0
@@ -268,59 +367,27 @@ l_word_loop:
 		MOV r_gpio2_zeros , 0xffffffff
 		MOV r_gpio3_zeros , 0x00000000
 		*/
-
-		// SBBO can take a fixed offset to the address, so we load our addresses regisrters
-		// with the address of the lower address (the CLEAR) and then offet from that to get the 
-		// higher one (the SET). This save 4 loads.
-
-		MOV r_gpio0_addr, GPIO0 | GPIO_CLEARDATAOUT; 
-		MOV r_gpio1_addr, GPIO1 | GPIO_CLEARDATAOUT; 
-		MOV r_gpio2_addr, GPIO2 | GPIO_CLEARDATAOUT; 
-		MOV r_gpio3_addr, GPIO3 | GPIO_CLEARDATAOUT; 
-
-		// The *_all_mask constants have a 1 bit for each pin that we should control. We can not just
-		// muck will all the pins in each gpio bank since other stuff might be using those other pins. 
-
-		// Load up 1's for all the pins that ledscape controls in each gpio bank
-		MOV r_data0, pru0_gpio0_all_mask; 
-		MOV r_data1, pru0_gpio1_all_mask; 
-		MOV r_data2, pru0_gpio2_all_mask; 
-		MOV r_data3, pru0_gpio3_all_mask; 
-
-		// SET all masked outputs high on all pins we control
-		// Both zero and one data bit waveforms start with pin going high 
-		SBBO r_data0 , r_gpio0_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
-		SBBO r_data1 , r_gpio1_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
-		SBBO r_data2 , r_gpio2_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
-		SBBO r_data3 , r_gpio3_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;			
-
-		// Wait T0H. This is the width of a 0 bit in the waveform going out the pins
-		PAUSE_NS 200;
-
-		// CLEAR the output (make pin low) that has bit set in zeros
-		// These will make this output waveform go low, making it into a short zero pulse
-		// Note that the *_zeros registers we set above based on the pixel data that was passed to
-		// us from the userspace process
-		SBBO r_gpio0_zeros , r_gpio0_addr , 0 , 4;			
-		SBBO r_gpio1_zeros , r_gpio1_addr , 0 , 4;	
-		SBBO r_gpio2_zeros , r_gpio2_addr , 0 , 4;			
-		SBBO r_gpio3_zeros , r_gpio3_addr , 0 , 4;	
-
-		// Wait T1H-T0H. The pins that did not get set low directly above are still hight, so 
-		// so leaving them high this additional time will make a 1 bit in the datastream waveform.
-		PAUSE_NS 250;
 		
-		// CLEAR all masked outputs (all pins we control set low).
-		// Both zero and one data bit waveforms end with pin going low. 
-		// This is the end of the waveform for the current bit. 
-		// Pins that are alreday low just stay low. 
-		SBBO r_data0 , r_gpio0_addr , 0 , 4;			
-		SBBO r_data1 , r_gpio1_addr , 0 , 4;	
-		SBBO r_data2 , r_gpio2_addr , 0 , 4;			
-		SBBO r_data3 , r_gpio3_addr , 0 , 4;	
+		SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
+	//	SEND_BIT_TO_GPIO_BANK GPIO1, pru0_gpio1_all_mask, r_gpio1_zeros
+	//	SEND_BIT_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask, r_gpio2_zeros
 
-		// Wait TLD. THis is the time between sequential bits
-		//PAUSE_NS 450;
+		CLEAR_PINS_GPIO_BANK GPIO0, pru0_gpio0_all_mask
+	//	CLEAR_PINS_GPIO_BANK GPIO1, pru0_gpio1_all_mask
+	//	CLEAR_PINS_GPIO_BANK GPIO2, pru0_gpio2_all_mask
+
+/*
+		SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
+		SEND_BIT_TO_GPIO_BANK GPIO1, pru0_gpio1_all_mask, r_gpio1_zeros
+		SEND_BIT_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask, r_gpio2_zeros
+*/
+		//SEND_BIT_TO_GPIO_BANK GPIO3, pru0_gpio3_all_mask, r_gpio3_zeros
+
+		//SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
+
+		// Wait TLD. This is the time between sequential bits
+		// Loading the pixel data and setting the *_zerobits takes long enough that 
+		// we do not need a explcit delay here. 
 
 		// Next iteration of the 24 bit loop
 		QBNE l_bit_loop, r_bit_num, 0
@@ -361,6 +428,7 @@ SKIP_EVERYTHING:
 	QBA _LOOP
 
 EXIT:
+
 	// Write a 0xFF into the response field so that they know we're done
 	MOV r2, #0xFF
 	SBCO r2, CONST_PRUDRAM, 12, 4
