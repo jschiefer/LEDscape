@@ -422,8 +422,9 @@ lab:
 #define GPIO3 0x481AE000
 
 /** Offsets for the clear and set registers in the devices */
-#define GPIO_CLEARDATAOUT 0x190
-#define GPIO_SETDATAOUT 0x194
+#define GPIO_DATAIN 		0x138		// Read level of pins
+#define GPIO_CLEARDATAOUT 	0x190		 
+#define GPIO_SETDATAOUT 	0x194		
 
 #define NOP       mov r0, r0
 

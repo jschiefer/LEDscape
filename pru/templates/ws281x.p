@@ -77,12 +77,6 @@ l:
 .macro SEND_BIT_TO_GPIO_BANK
 	.mparam gpio_addr_const,mask_const,zerobits_reg
 
-		// SBBO can take a fixed offset to the address, so we load our addresses regisrters
-		// with the address of the lower address (the CLEAR) and then offet from that to get the 
-		// higher one (the SET). This save 4 loads.
-		MOV r_gpio_temp_addr, gpio_addr_const | GPIO_CLEARDATAOUT; 
-
-
 		// The *_all_mask constants have a 1 bit for each pin that we should control. We can not just
 		// muck will all the pins in each gpio bank since other stuff might be using those other pins. 
 
@@ -91,18 +85,60 @@ l:
 
 		// SET all masked outputs high on all pins we control
 		// Both zero and one data bit waveforms start with pin going high 
-		SBBO r_gpio_temp_mask , r_gpio_temp_addr , GPIO_SETDATAOUT - GPIO_CLEARDATAOUT , 4;
+		MOV r_gpio_temp_addr, gpio_addr_const + GPIO_SETDATAOUT; 
 
+//		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+
+		// Twiddle bit 0 PRU output pin for diagnostics
+		SET r30,r30, 0
+
+		//SBBO r_gpio_temp_mask.b3 , r_gpio_temp_addr , 3 , 1;
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+
+
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+
+
+/*
+		// Wait for 1's to actually show up. 
+
+		MOV r_gpio_temp_addr, gpio_addr_const+GPIO_DATAIN; 
+
+
+WAIT_BITS_SET:
+
+		LBBO r_temp1.b3 , r_gpio_temp_addr , 3 , 1;
+		AND r_temp1.b3 , r_temp1.b3, r_gpio_temp_mask.b3
+		//QBNE WAIT_BITS_SET , r_temp1.b3 , r_gpio_temp_mask.b3 
+*/		
+
+		// Diagnostics
+		CLR r30,r30, 0
 
 		// Wait T0H. This is the width of a 0 bit in the waveform going out the pins
-		PAUSE_NS 250;
+		//PAUSE_NS 250;
 
 
 		// CLEAR the output (make pin low) that has bit set in zeros
 		// These will make this output waveform go low, making it into a short zero pulse
 		// Note that the *_zeros registers we set above based on the pixel data that was passed to
 		// us from the userspace process
-		SBBO zerobits_reg, r_gpio_temp_addr , 0 , 4;	
+
+		MOV r_gpio_temp_addr, gpio_addr_const + GPIO_CLEARDATAOUT; 	
+
+		// Twiddle bit 0 PRU output pin for diagnostics
+		//SET r30,r30, 0
+
+		//SBBO zerobits_reg.b3, r_gpio_temp_addr , 3 , 1;	
+		SBBO zerobits_reg , r_gpio_temp_addr , 0 , 4;	
+
+		// Diagnostics
+		//CLR r30,r30, 0
+
 
 		PAUSE_NS 250;
 
@@ -129,11 +165,16 @@ l:
 		// Load up 1's for all the pins that ledscape controls in each gpio bank
 		MOV r_gpio_temp_mask, mask_const; 
 
+		//SET r30,r30, 0
+
 		// CLEAR all masked outputs (all pins we control set low).
 		// Both zero and one data bit waveforms end with pin going low. 
 		// This is the end of the waveform for the current bit. 
 		// Pins that are alreday low just stay low. 
 		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
+//		SBBO r_gpio_temp_mask.b3 , r_gpio_temp_addr , 3 , 1;
+
+		//CLR r30,r30, 0
 
 		PAUSE_NS 200;
 			
@@ -268,6 +309,8 @@ START:
 	// Wait for the start condition from the main program to indicate
 	// that we have a rendered frame ready to clock out.  This also
 	// handles the exit case if an invalid value is written to the start
+
+
 	// start position.
 _LOOP:
 
@@ -360,14 +403,15 @@ l_word_loop:
 
 		// OK, now all the gpio_zeros have a 1 for each GPIO bit that should be set to 0 in the middle of this signal
 
-		/* 
+		
 		// TESTING
 		MOV r_gpio0_zeros , 0xffffffff
 		MOV r_gpio1_zeros , 0xffffffff
 		MOV r_gpio2_zeros , 0xffffffff
 		MOV r_gpio3_zeros , 0x00000000
-		*/
 		
+
+loopy:
 		SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
 	//	SEND_BIT_TO_GPIO_BANK GPIO1, pru0_gpio1_all_mask, r_gpio1_zeros
 	//	SEND_BIT_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask, r_gpio2_zeros
@@ -388,6 +432,9 @@ l_word_loop:
 		// Wait TLD. This is the time between sequential bits
 		// Loading the pixel data and setting the *_zerobits takes long enough that 
 		// we do not need a explcit delay here. 
+
+		PAUSE_NS 400
+		JMP loopy
 
 		// Next iteration of the 24 bit loop
 		QBNE l_bit_loop, r_bit_num, 0
