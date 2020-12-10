@@ -103,19 +103,6 @@ l:
 		SBBO r_gpio_temp_mask , r_gpio_temp_addr , 0 , 4;
 
 
-/*
-		// Wait for 1's to actually show up. 
-
-		MOV r_gpio_temp_addr, gpio_addr_const+GPIO_DATAIN; 
-
-
-WAIT_BITS_SET:
-
-		LBBO r_temp1.b3 , r_gpio_temp_addr , 3 , 1;
-		AND r_temp1.b3 , r_temp1.b3, r_gpio_temp_mask.b3
-		//QBNE WAIT_BITS_SET , r_temp1.b3 , r_gpio_temp_mask.b3 
-*/		
-
 		// Diagnostics
 		CLR r30,r30, 0
 
@@ -140,7 +127,7 @@ WAIT_BITS_SET:
 		//CLR r30,r30, 0
 
 
-		PAUSE_NS 250;
+		//PAUSE_NS 250;
 
 
 /*
@@ -403,22 +390,22 @@ l_word_loop:
 
 		// OK, now all the gpio_zeros have a 1 for each GPIO bit that should be set to 0 in the middle of this signal
 
-		
+/*		
 		// TESTING
 		MOV r_gpio0_zeros , 0xffffffff
 		MOV r_gpio1_zeros , 0xffffffff
 		MOV r_gpio2_zeros , 0xffffffff
 		MOV r_gpio3_zeros , 0x00000000
+*/
 		
 
-loopy:
 		SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
-	//	SEND_BIT_TO_GPIO_BANK GPIO1, pru0_gpio1_all_mask, r_gpio1_zeros
-	//	SEND_BIT_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask, r_gpio2_zeros
+		SEND_BIT_TO_GPIO_BANK GPIO1, pru0_gpio1_all_mask, r_gpio1_zeros
+		SEND_BIT_TO_GPIO_BANK GPIO2, pru0_gpio2_all_mask, r_gpio2_zeros
 
 		CLEAR_PINS_GPIO_BANK GPIO0, pru0_gpio0_all_mask
-	//	CLEAR_PINS_GPIO_BANK GPIO1, pru0_gpio1_all_mask
-	//	CLEAR_PINS_GPIO_BANK GPIO2, pru0_gpio2_all_mask
+		CLEAR_PINS_GPIO_BANK GPIO1, pru0_gpio1_all_mask
+		CLEAR_PINS_GPIO_BANK GPIO2, pru0_gpio2_all_mask
 
 /*
 		SEND_BIT_TO_GPIO_BANK GPIO0, pru0_gpio0_all_mask, r_gpio0_zeros
@@ -434,7 +421,6 @@ loopy:
 		// we do not need a explcit delay here. 
 
 		PAUSE_NS 400
-		JMP loopy
 
 		// Next iteration of the 24 bit loop
 		QBNE l_bit_loop, r_bit_num, 0
