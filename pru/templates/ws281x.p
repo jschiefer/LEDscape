@@ -43,8 +43,8 @@
 #include "common.p.h"
 
 // Pause nanoseconds by spinning in place
-// Only accurate to next lowest ns multipule of 10 so 296ns will spin for 290ns and 300ns will spin for 300ns. 
-// Rewitten here as a macro becuase (unlike #defines) macros have local label scope
+// Only accurate to next lowest ns multiple of 10 so 296ns will spin for 290ns and 300ns will spin for 300ns. 
+// Rewritten here as a macro because (unlike #defines) macros have local label scope
 // so we do not have to worry about specifying (or messing up) labels on each use. 
 
 .macro PAUSE_NS
@@ -64,7 +64,7 @@ START:
 	// Enable OCP master port. This lets the PRU get to the gpio bank registers in the ARM memory space. 
 	// clear the STANDBY_INIT bit in the SYSCFG register,
 	// otherwise the PRU will not be able to write outside the
-	// PRU memory space and to the BeagleBon's pins.
+	// PRU memory space and to the BeagleBone's pins.
 	LBCO	r0, C4, 4, 4
 	CLR	r0, r0, 4
 	SBCO	r0, C4, 4, 4
@@ -123,9 +123,9 @@ _LOOP:
 
 
 	// Check we are the right PRU otherwise
-	// we will have mutlipule PRUs running the exact smae code competing with
+	// we will have multiple PRUs running the exact same code competing with
 	// each other for access to the OCP bus which is bad becuase then you occasionally
-	// get glitches when one PRU access comes after the other becuase of a L3/L4 delay. 
+	// get glitches when one PRU access comes after the other because of a L3/L4 delay. 
 
 	MOV r3, PRU_NUM
 	QBNE SKIP_EVERYTHING , r3 , 0
@@ -136,7 +136,9 @@ _LOOP:
 l_word_loop:
 
 	// We do not have enough registers to keep all 24 words of channel data for each row of pixels so
-	// we copy channels 8-23 into PRU RAM which is much faster than DDR RAM. 
+	// we copy channels 8-23 into PRU RAM which is much faster than DDR RAM, and not touching DDR RAM
+	// inside our main pixel loop helps reduce jitter since PRU RAM has deterministic access times. 
+	// This also prevents us from saturating the interconnects with a high priority 24*4 byte read on each bit pass. 
 
 	// Load the channels 8-23 from DDR RAM into data registers 0-15. 
 	LBBO r_data0 , r_data_addr , (8*4)        , 16*4;		// Start filling registers at r_data0, copy from r_data_addr, offset 0 from addr , total of 8 words
@@ -157,8 +159,8 @@ l_word_loop:
 		// r_gpioX_zeros = 0x00
 		RESET_GPIO_ZEROS()
 
-		// TEST_BIT_ZERO will set the apropriate bit in the correct _zeros register if that data bit is 0. 
-		// Uses r_bit_num 
+		// TEST_BIT_ZERO will set the appropriate bit in the correct _zeros register if that data bit is 0. 
+		// Note: The macro uses r_bit_num 
 
 		// First we do the channels 0-7 that we already have loaded into data registers 0-7...
 		TEST_BIT_ZERO(r_data0,  0)
@@ -170,7 +172,7 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data6,  6)
 		TEST_BIT_ZERO(r_data7,  7)
 
-		// load channels 8-15 from PRU RAM into data registers 8-15 and decode thier bits 
+		// load channels 8-15 from PRU RAM into data registers 8-15 and decode their bits 
 		LBCO r_data8 , CONST_PRUDRAM , PRU_RAM_PIXELS_OFFSET + (0 * 4) , 8*4;		// Start filling registers at r_data8, from right after the API block, total of 8 words
 		
 		TEST_BIT_ZERO(r_data8,  8)
@@ -182,7 +184,7 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data14, 14)
 		TEST_BIT_ZERO(r_data15, 15)
 
-		// load channels 8-15 from PRU RAM into data registers 8-15 and decode thier bits 
+		// load channels 8-15 from PRU RAM into data registers 8-15 and decode their bits 
 		LBCO r_data8 , CONST_PRUDRAM , PRU_RAM_PIXELS_OFFSET + (8 * 4), 8*4;		//  Start filling registers at r_data8, from right after the API block + 8 words in,  total of 8 words
 		
 		TEST_BIT_ZERO(r_data8, 16)
@@ -221,31 +223,20 @@ l_word_loop:
 
 		// The SBBO instruction lets us specify an address offset so we can save some
 		// time by loading the lower of the two set/clear addresses into a register and then 
-		// using the idfferent to the higer one as an offset. Wouldn't it be cleaner to use
+		// using the different to the higher one as an offset. Wouldn't it be cleaner to use
 		// the base address as the base and the set/clear offsets directly? Yes, but the 
 		// SBBO offset is not big enough to hold the full set/clear offsets. 
 		// Note that clear is at 0x190 and set is at 0x194 so clear is lower so we use that as base. 
 		#define  c_cleardataout_offset  (0)
 		#define  c_setdataout_offset  	(GPIO_SETDATAOUT - GPIO_CLEARDATAOUT )
 
-		// SET all masked outputs high on all pins we control
+		// SET all masked outputs high on all pins we control in GPIO Bank 0
 		// Both zero and one data bit waveforms start with pin going high 
-
-/*
 		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
-		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
-		SBBO r_gpio2_mask , r_gpio2_addr ,  c_setdataout_offset  , 4;
-		SBBO r_gpio3_mask , r_gpio3_addr ,  c_setdataout_offset  , 4;
 
-		// CLEAR the pins that are sending 0 bits 
-		SBBO r_gpio0_zeros , r_gpio0_addr ,  c_cleardataout_offset  , 4;
-		SBBO r_gpio1_zeros , r_gpio1_addr ,  c_cleardataout_offset  , 4;
-		SBBO r_gpio2_zeros , r_gpio2_addr ,  c_cleardataout_offset  , 4;
-		SBBO r_gpio3_zeros , r_gpio3_addr ,  c_cleardataout_offset  , 4;
-*/
-
-		// SET all masked outputs high on all pins we control
-		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
+		// Waste time to fill the T0H period
+		// Redundant writes seem to keep the interconnect busy and block others 
+		// from interuppting us
 		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
@@ -254,7 +245,14 @@ l_word_loop:
 		// CLEAR the pins that are sending 0 bits 
 		SBBO r_gpio0_zeros , r_gpio0_addr ,  c_cleardataout_offset  , 4;
 
-		// SET all masked outputs high on all pins we control
+		// Note that the 1 bits from bank 0
+		// are still high. This is ok, as long as the T1H period does
+		// not exceed the reset time then no hard done except some time wasted.		
+
+		// Now repeat the above pattern to generate all the 0 bits on 
+		// the remaining 3 GPIO banks. 
+
+		// SET all masked outputs high on all pins we control in bank 1 and wait T0H
 		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
@@ -264,7 +262,7 @@ l_word_loop:
 		// CLEAR the pins that are sending 0 bits 
 		SBBO r_gpio1_zeros , r_gpio1_addr ,  c_cleardataout_offset  , 4;
 
-		// SET all masked outputs high on all pins we control
+		// SET all masked outputs high on all pins we control in bank 2 and wait T0H
 		SBBO r_gpio2_mask , r_gpio2_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio2_mask , r_gpio2_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio2_mask , r_gpio2_addr ,  c_setdataout_offset  , 4;
@@ -274,7 +272,7 @@ l_word_loop:
 		// CLEAR the pins that are sending 0 bits 
 		SBBO r_gpio2_zeros , r_gpio2_addr ,  c_cleardataout_offset  , 4;
 
-		// SET all masked outputs high on all pins we control
+		// SET all masked outputs high on all pins we control in bank 3 and wait T0H
 		SBBO r_gpio3_mask , r_gpio3_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio3_mask , r_gpio3_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio3_mask , r_gpio3_addr ,  c_setdataout_offset  , 4;
@@ -286,6 +284,7 @@ l_word_loop:
 
 
 		// CLEAR all the pins (the ones that sent 0 bits are already clear so really only the ones sending 1 bits)
+		// This ends all the bits that are still high (the 1 bits) on all the GPIO banks. 
 		SBBO r_gpio0_mask , r_gpio0_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio1_mask , r_gpio1_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio2_mask , r_gpio2_addr ,  c_cleardataout_offset  , 4;
@@ -293,7 +292,7 @@ l_word_loop:
 
 		// Wait TLD. This is the time between sequential bits
 		// Loading the pixel data and setting the *_zerobits takes long enough that 
-		// we do not need a explcit delay here. 
+		// we do not need a explicit delay here. 
 
 		// Next iteration of the 24 bit loop
 		QBNE l_bit_loop, r_bit_num, 0
@@ -312,21 +311,21 @@ FRAME_DONE:
 	// Delay at least 300 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.	
 
-	// Time TLL - latch data time
+	// Time TLL - latch data time. Note that this is longer than the original WS2812B spec
+	// since newer WS2813B and others need a longer time. 
 	PAUSE_NS 300000
 
 SKIP_EVERYTHING:
 
-	// Write out that we are done!
 	// Store a non-zero response in the buffer so that they know that we are done
-	// aso a quick hack, we write the counter so that we know how
-	// long it took to write out.
+	// we also write the cycle counter so that we know how
+	// long it took to write out this frame.
 	MOV r8, PRU_CONTROL_ADDRESS // control register
 	LBBO r2, r8, 0xC, 4
 	SBCO r2, CONST_PRUDRAM, 12, 4
 
 
-	// Write a 0x01 into the response field so that they know we're done with this frame
+	// Write a 0x01 into the response field so that the usermode process knows we're done with this frame
 	MOV r2, #0x01
 	SBCO r2, CONST_PRUDRAM, 12, 4
 
