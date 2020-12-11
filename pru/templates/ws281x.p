@@ -55,6 +55,9 @@ l:
 	QBNE l, r_sleep_counter, 0
 .endm
 
+// Where we will keep a cache of 16 words of pixel data in PRU RAM
+// right above the API block with is 4 words long.
+#define PRU_RAM_PIXELS_OFFSET (4*4)
 
 START:
 
@@ -135,16 +138,14 @@ l_word_loop:
 	// We do not have enough registers to keep all 24 words of channel data for each row of pixels so
 	// we copy channels 8-23 into PRU RAM which is much faster than DDR RAM. 
 
-	// Load the channels 0-23 from DDR RAM into data registers 0-23. 
-	// Note that this will clobber the r_gpio and r_mask 
-	LBBO r_data0 , r_data_addr , 4 * 4        , 23*4;		// Start filling registers at r_data0, copy from r_data_addr, offset 0 from addr , total of 8 words
+	// Load the channels 8-23 from DDR RAM into data registers 0-15. 
+	LBBO r_data0 , r_data_addr , (8*4)        , 16*4;		// Start filling registers at r_data0, copy from r_data_addr, offset 0 from addr , total of 8 words
 
-	/// ...and save them into PRU RAM right above the API struct which is 4 words long
-	SBCO r_data0 , CONST_PRUDRAM , 4 * 4 	  , 12*4;	    // Save first block of 12 channels to PRU RAM after the API block
+	/// ...and save 8-23 into PRU RAM right above the API struct which is 4 words long
+	SBCO r_data0 , CONST_PRUDRAM , PRU_RAM_PIXELS_OFFSET	  , 16*4;	    
 
-	// channels 0-7 from DDR RAM into data registers 0-7
-	// We can leave these here and reuse them for each of the 24 bits until the next row of pixels 
-	LBBO r_data0 , r_data_addr , 0 * 4 , 8*4;		
+	// Now load the channels 0-7 from DDR RAM into data registers 0-7. 
+	LBBO r_data0 , r_data_addr , (0*4)        , 8*4;		// Start filling registers at r_data0, copy from r_data_addr, offset 0 from addr , total of 8 words
 
 	// for bit in 23 to 0
 	MOV r_bit_num, 24
@@ -170,7 +171,7 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data7,  7)
 
 		// load channels 8-15 from PRU RAM into data registers 8-15 and decode thier bits 
-		LBCO r_data8 , CONST_PRUDRAM , 8 * 4 , 8*4;		// Start filling registers at r_data8, copy from r_data_addr, offset from addr , total of 8 words
+		LBCO r_data8 , CONST_PRUDRAM , PRU_RAM_PIXELS_OFFSET + (0 * 4) , 8*4;		// Start filling registers at r_data8, from right after the API block, total of 8 words
 		
 		TEST_BIT_ZERO(r_data8,  8)
 		TEST_BIT_ZERO(r_data9,  9)
@@ -182,7 +183,7 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data15, 15)
 
 		// load channels 8-15 from PRU RAM into data registers 8-15 and decode thier bits 
-		LBCO r_data8 , CONST_PRUDRAM , 16 * 4 , 8*4;		// Start filling registers at r_data8, copy from r_data_addr, offset from addr , total of 8 words
+		LBCO r_data8 , CONST_PRUDRAM , PRU_RAM_PIXELS_OFFSET + (8 * 4), 8*4;		//  Start filling registers at r_data8, from right after the API block + 8 words in,  total of 8 words
 		
 		TEST_BIT_ZERO(r_data8, 16)
 		TEST_BIT_ZERO(r_data8, 17)
@@ -240,6 +241,7 @@ l_word_loop:
 		SBBO r_gpio1_zeros , r_gpio1_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio2_zeros , r_gpio2_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio3_zeros , r_gpio3_addr ,  c_cleardataout_offset  , 4;
+
 
 		// CLEAR all the pins (the ones that sent 0 bits are already clear so really only the ones sending 1 bits)
 		SBBO r_gpio0_mask , r_gpio0_addr ,  c_cleardataout_offset  , 4;

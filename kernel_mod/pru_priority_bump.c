@@ -41,15 +41,15 @@ static int __init helloBBB_init(void){
    
    mem_addr = ioremap_nocache( pru_init_priority ,  4 );
 
-   printk(KERN_INFO "EBB: Mapped %x to %p\n", pru_init_priority , mem_addr  );
+   printk(KERN_INFO "PPB: Mapped %x to %p\n", pru_init_priority , mem_addr  );
 
-   printk(KERN_INFO "EBB: Was %x\n",  ioread32( mem_addr ) );
+   printk(KERN_INFO "PPB: Was %x\n",  ioread32( mem_addr ) );
 
    iowrite32( 0x03 << 4 , mem_addr );		// bits 5-4=PRU-ICSS initiator priority.
 
-   printk(KERN_INFO "EBB: Is %x\n",  ioread32( mem_addr ) );
+   printk(KERN_INFO "PPB: Is %x\n",  ioread32( mem_addr ) );
 
-  iounmap(mem_addr);
+   iounmap(mem_addr);
 
    return 0;
 }
@@ -59,7 +59,7 @@ static int __init helloBBB_init(void){
  *  code is used for a built-in driver (not a LKM) that this function is not required.
  */
 static void __exit helloBBB_exit(void){
-   printk(KERN_INFO "EBB: Goodbye %s from the BBB LKM!\n", name);
+   printk(KERN_INFO "PPB: Goodbye %s from the PPB LKM!\n", name);
 }
 
 /** @brief A module must use the module_init() module_exit() macros from linux/init.h, which
