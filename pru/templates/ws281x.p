@@ -40,8 +40,6 @@
 .origin 0
 .entrypoint START
 
-
-
 #include "common.p.h"
 
 // Pause nanoseconds by spinning in place
@@ -134,11 +132,20 @@ _LOOP:
 
 l_word_loop:
 
-	// Load the channels 0-7 from DDR RAM into data registers 0-7. We will keep them here for the
-	// next 24 bit passes to avoid having to go back to DDR which is very slow. 
+	// We do not have enough registers to keep all 24 words of channel data for each row of pixels so
+	// we copy channels 8-23 into PRU RAM which is much faster than DDR RAM. 
 
-	LBBO r_data0 , r_data_addr , 0 * 4 , 8*4;		// Start filling registers at r_data0, copy from r_data_addr, offset 0 from addr , total of 8 words
-	
+	// Load the channels 0-23 from DDR RAM into data registers 0-23. 
+	// Note that this will clobber the r_gpio and r_mask 
+	LBBO r_data0 , r_data_addr , 4 * 4        , 23*4;		// Start filling registers at r_data0, copy from r_data_addr, offset 0 from addr , total of 8 words
+
+	/// ...and save them into PRU RAM right above the API struct which is 4 words long
+	SBCO r_data0 , CONST_PRUDRAM , 4 * 4 	  , 12*4;	    // Save first block of 12 channels to PRU RAM after the API block
+
+	// channels 0-7 from DDR RAM into data registers 0-7
+	// We can leave these here and reuse them for each of the 24 bits until the next row of pixels 
+	LBBO r_data0 , r_data_addr , 0 * 4 , 8*4;		
+
 	// for bit in 23 to 0
 	MOV r_bit_num, 24
 
@@ -153,7 +160,6 @@ l_word_loop:
 		// Uses r_bit_num 
 
 		// First we do the channels 0-7 that we already have loaded into data registers 0-7...
-
 		TEST_BIT_ZERO(r_data0,  0)
 		TEST_BIT_ZERO(r_data1,  1)
 		TEST_BIT_ZERO(r_data2,  2)
@@ -163,11 +169,8 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data6,  6)
 		TEST_BIT_ZERO(r_data7,  7)
 
-		// We do not have enough registers to keep all channels loaded into registers, so we 
-		// have to keep swapping data registers 8-15 to process all the channels.
-
-		// channels 8-15 into data registers 8-15
-		LBBO r_data8 , r_data_addr , 8 * 4 , 8*4;		// Start filling registers at r_data8, copy from r_data_addr, offset from addr , total of 8 words
+		// load channels 8-15 from PRU RAM into data registers 8-15 and decode thier bits 
+		LBCO r_data8 , CONST_PRUDRAM , 8 * 4 , 8*4;		// Start filling registers at r_data8, copy from r_data_addr, offset from addr , total of 8 words
 		
 		TEST_BIT_ZERO(r_data8,  8)
 		TEST_BIT_ZERO(r_data9,  9)
@@ -178,13 +181,9 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data14, 14)
 		TEST_BIT_ZERO(r_data15, 15)
 
-		// channels 16-23 into data registers 8-15
-		// note that this covers channels 8-15 in r_data8-15 so we will 
-		// have to reload those next pass though. 
-		// channels 16-23 into data registers 8-15
-		LBBO r_data8 , r_data_addr , 16 * 4 , 8*4;		// Start filling registers at r_data8, copy from r_data_addr, offset from addr , total of 8 words
+		// load channels 8-15 from PRU RAM into data registers 8-15 and decode thier bits 
+		LBCO r_data8 , CONST_PRUDRAM , 16 * 4 , 8*4;		// Start filling registers at r_data8, copy from r_data_addr, offset from addr , total of 8 words
 		
-		// Test some more bits to pass the time
 		TEST_BIT_ZERO(r_data8, 16)
 		TEST_BIT_ZERO(r_data8, 17)
 		TEST_BIT_ZERO(r_data10, 18)
@@ -236,25 +235,13 @@ l_word_loop:
 		SBBO r_gpio2_mask , r_gpio2_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio3_mask , r_gpio3_addr ,  c_setdataout_offset  , 4;
 
-		// Do more redundant memory writes to delay for T0H (200ns-500ns, we hit at 200ns to be fast)
-		// Seems like doing writes across the interconnect here help block other initiators from
-		// jumpping in and potentially blocking us
-
-		//SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
-		//SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
-
+		// CLEAR the pins that are sending 0 bits 
 		SBBO r_gpio0_zeros , r_gpio0_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio1_zeros , r_gpio1_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio2_zeros , r_gpio2_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio3_zeros , r_gpio3_addr ,  c_cleardataout_offset  , 4;
 
-		// Do more redundant memory writes to delay for T1H (250ns-5500ns longer than T0H, we hit at 250ns to be fast)
-		// Seems like doing writes across the interconnect here help block other initiators from
-		// jumpping in and potentially blocking us
-
-		//SBBO r_gpio0_zeros , r_gpio0_addr ,  c_cleardataout_offset  , 4;
-		//SBBO r_gpio1_zeros , r_gpio1_addr ,  c_cleardataout_offset  , 4;
-
+		// CLEAR all the pins (the ones that sent 0 bits are already clear so really only the ones sending 1 bits)
 		SBBO r_gpio0_mask , r_gpio0_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio1_mask , r_gpio1_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio2_mask , r_gpio2_addr ,  c_cleardataout_offset  , 4;
@@ -263,7 +250,6 @@ l_word_loop:
 		// Wait TLD. This is the time between sequential bits
 		// Loading the pixel data and setting the *_zerobits takes long enough that 
 		// we do not need a explcit delay here. 
-
 
 		// Next iteration of the 24 bit loop
 		QBNE l_bit_loop, r_bit_num, 0
