@@ -231,6 +231,7 @@ l_word_loop:
 		// SET all masked outputs high on all pins we control
 		// Both zero and one data bit waveforms start with pin going high 
 
+/*
 		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
 		SBBO r_gpio2_mask , r_gpio2_addr ,  c_setdataout_offset  , 4;
@@ -241,6 +242,26 @@ l_word_loop:
 		SBBO r_gpio1_zeros , r_gpio1_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio2_zeros , r_gpio2_addr ,  c_cleardataout_offset  , 4;
 		SBBO r_gpio3_zeros , r_gpio3_addr ,  c_cleardataout_offset  , 4;
+*/
+
+		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
+		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
+		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
+		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
+		SBBO r_gpio0_mask , r_gpio0_addr ,  c_setdataout_offset  , 4;
+
+		// CLEAR the pins that are sending 0 bits 
+		SBBO r_gpio0_zeros , r_gpio0_addr ,  c_cleardataout_offset  , 4;
+
+
+		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
+		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
+		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
+		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
+		SBBO r_gpio1_mask , r_gpio1_addr ,  c_setdataout_offset  , 4;
+
+		// CLEAR the pins that are sending 0 bits 
+		SBBO r_gpio1_zeros , r_gpio1_addr ,  c_cleardataout_offset  , 4;
 
 
 		// CLEAR all the pins (the ones that sent 0 bits are already clear so really only the ones sending 1 bits)
