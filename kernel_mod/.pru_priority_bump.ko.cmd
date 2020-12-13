@@ -1,1 +1,0 @@
-cmd_/root/LEDscape/kernel_mod/pru_priority_bump.ko := ld -EL -r  -T /usr/src/linux-headers-3.8.13-bone80/scripts/module-common.lds --build-id  -o /root/LEDscape/kernel_mod/pru_priority_bump.ko /root/LEDscape/kernel_mod/pru_priority_bump.o /root/LEDscape/kernel_mod/pru_priority_bump.mod.o
