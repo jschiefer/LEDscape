@@ -842,6 +842,8 @@ int ParseSourceLine( SOURCEFILE *ps, int length, char *src, SRCLINE *pa )
     int     srcIdx,wordIdx;
     int     parmCnt;
 
+    (void)length;
+
     srcIdx = 0;
     pa->Flags = 0;
     pa->Terms = 0;

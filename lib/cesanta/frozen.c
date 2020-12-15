@@ -308,7 +308,7 @@ struct json_token *parse_json2(const char *s, int s_len) {
   return frozen.tokens;
 }
 
-static int path_part_len(const char *p) {
+static uint path_part_len(const char *p) {
   int i = 0;
   while (p[i] != '\0' && p[i] != '[' && p[i] != '.') i++;
   return i;
@@ -317,7 +317,8 @@ static int path_part_len(const char *p) {
 const struct json_token *find_json_token(const struct json_token *toks,
                                          const char *path) {
   while (path != 0 && path[0] != '\0') {
-    int i, ind2 = 0, ind = -1, skip = 2, n = path_part_len(path);
+    int i, ind2 = 0, ind = -1, skip = 2;
+    uint n = path_part_len(path);
     if (path[0] == '[') {
       if (toks->type != JSON_TYPE_ARRAY || !is_digit(path[1])) return 0;
       for (ind = 0, n = 1; path[n] != ']' && path[n] != '\0'; n++) {

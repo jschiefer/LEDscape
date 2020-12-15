@@ -96,7 +96,6 @@ typedef struct _MACRO {
 
 
 /* Local Support Funtions */
-static int _strncat( char *dst, int len, char *src );
 static MACRO *MacroFind( char *Name );
 static MACRO *MacroCreate( SOURCEFILE *ps, char *Name );
 int MacroAddArg( SOURCEFILE *ps, MACRO *pm, char *ArgText );
@@ -271,9 +270,9 @@ int ProcessMacro( SOURCEFILE *ps, int TermCnt, char **pTerms )
                     {
                         /* Match! */
                         if( (i+1)>=TermCnt )
-                            _strncat( src, MAX_SOURCE_LINE, pm->ArgDefault[i] );
+                            strncat( src, pm->ArgDefault[i], MAX_SOURCE_LINE );
                         else
-                            _strncat( src, MAX_SOURCE_LINE, pTerms[i+1] );
+                            strncat( src, pTerms[i+1], MAX_SOURCE_LINE );
                         goto SUBTEXTDONE;
                     }
                 }
@@ -287,13 +286,13 @@ int ProcessMacro( SOURCEFILE *ps, int TermCnt, char **pTerms )
 
                         /* Match! */
                         sprintf(labeltext,"_%s_%d_%d_", pm->LableName[i],pm->Id,pm->Expands);
-                        _strncat( src, MAX_SOURCE_LINE, labeltext );
+                        strncat( src, labeltext, MAX_SOURCE_LINE );
                         goto SUBTEXTDONE;
                     }
                 }
 
                 /* Sub in the original text */
-                _strncat( src, MAX_SOURCE_LINE, namebuf );
+                strncat( src, namebuf, MAX_SOURCE_LINE );
 SUBTEXTDONE:
                 nidx = 0;
             }
@@ -356,30 +355,6 @@ int CheckMacro( char *name )
 // Private Functions
 //
 ====================================================================*/
-
-static int _strncat( char *dst, int len, char *src )
-{
-    int sidx,didx;
-
-    didx = 0;
-    while( didx<len && dst[didx] )
-        didx++;
-    if( didx>(len-1) )
-        return(-1);
-    sidx = 0;
-    while( src[sidx] )
-    {
-        if( didx>(len-1) )
-        {
-            dst[didx] = 0;
-            return(-1);
-        }
-        dst[didx++] = src[sidx++];
-    }
-    dst[didx] = 0;
-    return(didx);
-}
-
 
 /*
 // MacroFind

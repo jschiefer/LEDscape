@@ -63,10 +63,36 @@
 
 static tprussdrv prussdrv;
 
+static int getvalue(const char *name, uint32_t *var)
+{
+    int fd;
+    char hexstring[PRUSS_UIO_PARAM_VAL_LEN], *eptr;
+
+    if ((fd = open(name, O_RDONLY)) == -1) {
+	fprintf(stderr, "Unable to open '%s': %s\n", name, strerror(errno));
+	return -1;
+    }
+
+    if (read(fd, hexstring, PRUSS_UIO_PARAM_VAL_LEN) < 0) {
+	fprintf(stderr, "Unable to read '%s': %s\n", name, strerror(errno));
+	close(fd);
+	return -1;
+    }
+
+    close(fd);
+
+    *var = strtoul(hexstring, &eptr, HEXA_DECIMAL_BASE);
+    if (eptr == hexstring) {
+	fprintf(stderr, "Unable to parse '%s' for '%s'\n", hexstring, name);
+	return -1;
+    }
+    return 0;
+}
+
 int __prussdrv_memmap_init(void)
 {
-    int i, fd;
-    char hexstring[PRUSS_UIO_PARAM_VAL_LEN];
+    int i;
+    void *tmp;
 
     if (prussdrv.mmap_fd == 0) {
         for (i = 0; i < NUM_PRU_HOSTIRQS; i++) {
@@ -78,26 +104,18 @@ int __prussdrv_memmap_init(void)
         else
             prussdrv.mmap_fd = prussdrv.fd[i];
     }
-    fd = open(PRUSS_UIO_DRV_PRUSS_BASE, O_RDONLY);
-    if (fd >= 0) {
-        read(fd, hexstring, PRUSS_UIO_PARAM_VAL_LEN);
-        prussdrv.pruss_phys_base =
-            strtoul(hexstring, NULL, HEXA_DECIMAL_BASE);
-        close(fd);
-    } else
+
+    if (getvalue(PRUSS_UIO_DRV_PRUSS_BASE, &prussdrv.pruss_phys_base) == -1)
         return -1;
-    fd = open(PRUSS_UIO_DRV_PRUSS_SIZE, O_RDONLY);
-    if (fd >= 0) {
-        read(fd, hexstring, PRUSS_UIO_PARAM_VAL_LEN);
-        prussdrv.pruss_map_size =
-            strtoul(hexstring, NULL, HEXA_DECIMAL_BASE);
-        close(fd);
-    } else
+    if (getvalue(PRUSS_UIO_DRV_PRUSS_SIZE, &prussdrv.pruss_map_size) == -1)
         return -1;
 
-    prussdrv.pru0_dataram_base =
-        mmap(0, prussdrv.pruss_map_size, PROT_READ | PROT_WRITE,
-             MAP_SHARED, prussdrv.mmap_fd, PRUSS_UIO_MAP_OFFSET_PRUSS);
+    if ((tmp = mmap(0, prussdrv.pruss_map_size, PROT_READ | PROT_WRITE,
+	  MAP_SHARED, prussdrv.mmap_fd, PRUSS_UIO_MAP_OFFSET_PRUSS)) == MAP_FAILED) {
+	fprintf(stderr, "Failed to mmap pruss: %s\n", strerror(errno));
+	return -1;
+    }
+    prussdrv.pru0_dataram_base = tmp;
     prussdrv.version =
         __pruss_detect_hw_version(prussdrv.pru0_dataram_base);
 
@@ -191,55 +209,32 @@ int __prussdrv_memmap_init(void)
             prussdrv.pru0_dataram_phy_base;
     }
 #ifndef DISABLE_L3RAM_SUPPORT
-    fd = open(PRUSS_UIO_DRV_L3RAM_BASE, O_RDONLY);
-    if (fd >= 0) {
-        read(fd, hexstring, PRUSS_UIO_PARAM_VAL_LEN);
-        prussdrv.l3ram_phys_base =
-            strtoul(hexstring, NULL, HEXA_DECIMAL_BASE);
-        close(fd);
-    } else
-        return -1;
+    if (getvalue(PRUSS_UIO_DRV_L3RAM_BASE, &prussdrv.l3ram_phys_base) == -1)
+	return -1;
+    if (getvalue(PRUSS_UIO_DRV_L3RAM_SIZE, &prussdrv.l3ram_map_size) == -1)
+	returnb -1;
 
 
-    fd = open(PRUSS_UIO_DRV_L3RAM_SIZE, O_RDONLY);
-    if (fd >= 0) {
-        read(fd, hexstring, PRUSS_UIO_PARAM_VAL_LEN);
-        prussdrv.l3ram_map_size =
-            strtoul(hexstring, NULL, HEXA_DECIMAL_BASE);
-        close(fd);
-    } else
-        return -1;
-
-    prussdrv.l3ram_base =
-        mmap(0, prussdrv.l3ram_map_size, PROT_READ | PROT_WRITE,
-             MAP_SHARED, prussdrv.mmap_fd, PRUSS_UIO_MAP_OFFSET_L3RAM);
+    if ((tmp = mmap(0, prussdrv.l3ram_map_size, PROT_READ | PROT_WRITE,
+	  MAP_SHARED, prussdrv.mmap_fd, PRUSS_UIO_MAP_OFFSET_L3RAM)) == MAP_FAILED) {
+	fprintf(stderr, "Failed to mmap l3ram: %s\n", strerror(errno));
+	return -1;
+    }
+    prussdrv.l3ram_base = tmp;
 #endif
+    if (getvalue(PRUSS_UIO_DRV_EXTRAM_BASE, &prussdrv.extram_phys_base) == -1)
+	return -1;
+    if (getvalue(PRUSS_UIO_DRV_EXTRAM_SIZE, &prussdrv.extram_map_size) == -1)
+	return -1;
 
-    fd = open(PRUSS_UIO_DRV_EXTRAM_BASE, O_RDONLY);
-    if (fd >= 0) {
-        read(fd, hexstring, PRUSS_UIO_PARAM_VAL_LEN);
-        prussdrv.extram_phys_base =
-            strtoul(hexstring, NULL, HEXA_DECIMAL_BASE);
-        close(fd);
-    } else
-        return -1;
+    if ((tmp = mmap(0, prussdrv.extram_map_size, PROT_READ | PROT_WRITE,
+	  MAP_SHARED, prussdrv.mmap_fd, PRUSS_UIO_MAP_OFFSET_EXTRAM)) == MAP_FAILED) {
+	fprintf(stderr, "Failed to mmap extram: %s\n", strerror(errno));
+	return -1;
+    }
 
-    fd = open(PRUSS_UIO_DRV_EXTRAM_SIZE, O_RDONLY);
-    if (fd >= 0) {
-        read(fd, hexstring, PRUSS_UIO_PARAM_VAL_LEN);
-        prussdrv.extram_map_size =
-            strtoul(hexstring, NULL, HEXA_DECIMAL_BASE);
-        close(fd);
-    } else
-        return -1;
-
-
-    prussdrv.extram_base =
-        mmap(0, prussdrv.extram_map_size, PROT_READ | PROT_WRITE,
-             MAP_SHARED, prussdrv.mmap_fd, PRUSS_UIO_MAP_OFFSET_EXTRAM);
-
+    prussdrv.extram_base = tmp;
     return 0;
-
 }
 
 int prussdrv_init(void)
@@ -254,7 +249,10 @@ int prussdrv_open(unsigned int host_interrupt)
     char name[PRUSS_UIO_PRAM_PATH_LEN];
     if (!prussdrv.fd[host_interrupt]) {
         sprintf(name, "/dev/uio%d", host_interrupt);
-        prussdrv.fd[host_interrupt] = open(name, O_RDWR | O_SYNC);
+        if ((prussdrv.fd[host_interrupt] = open(name, O_RDWR | O_SYNC)) == -1) {
+	    fprintf(stderr, "Failed to open '%s': %s\n", name, strerror(errno));
+	    return -1;
+	}
         return __prussdrv_memmap_init();
     } else {
         return -1;

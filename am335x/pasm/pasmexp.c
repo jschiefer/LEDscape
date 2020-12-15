@@ -423,6 +423,7 @@ int EXP_getOperation( SOURCEFILE *ps, char *s, int *pIdx, uint *pValue )
     char    c;
     int     rc = 1;
 
+    (void)ps;
     index = *pIdx;
 
     c = s[index];

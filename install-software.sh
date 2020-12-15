@@ -35,7 +35,7 @@ if [[ -f "//etc/ledscape-config.json" ]]; then
 	
 else
 
-	cp configs/default-config.json /etc/ledscape-config.json
+	cp configs/ws281x-config.json /etc/ledscape-config.json
 	
 fi
 

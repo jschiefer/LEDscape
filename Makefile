@@ -30,18 +30,19 @@ CFLAGS += \
 	-std=c99 \
 	-W \
 	-Wall \
-	-D_BSD_SOURCE \
+	-D_DEFAULT_SOURCE \
 	-Wp,-MMD,$(dir $@).$(notdir $@).d \
 	-Wp,-MT,$@ \
 	-I. \
-	-O2 \
+	-O2  -g \
 	-lm \
 	-mtune=cortex-a8 \
 	-march=armv7-a \
 	-Wunused-parameter \
 	-DNS_ENABLE_IPV6 \
-	-Wunknown-pragmas \
-	-Wsign-compare
+	-Wsign-compare \
+	-Werror \
+	-Wno-unknown-pragmas
 
 LDFLAGS += \
 
@@ -150,5 +151,9 @@ $(APP_LOADER_LIB):
 $(PASM):
 	$(MAKE) -C $(PASM_DIR)
 
+.PHONY: cscope
+cscope:
+	find . -name '*.[cCh]' -o -name '*.cc' >cscope.files
+	cscope -k -buq -p4 -v
 # Include all of the generated dependency files
 -include .*.o.d

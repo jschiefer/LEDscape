@@ -50,9 +50,6 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
-#define mint(t, a, b) ((t) (a) < (t) (b) ? (a) : (b))
-#define maxt(t, a, b) ((t) (a) > (t) (b) ? (a) : (b))
-
 static const int MAX_CONFIG_FILE_LENGTH_BYTES = 1024*1024*10;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -339,13 +336,7 @@ static struct
 	thread_state_lt udp_server_thread;
 	thread_state_lt e131_server_thread;
 	thread_state_lt demo_thread;
-} g_threads = {
-	{NULL, false, false},
-	{NULL, false, false},
-	{NULL, false, false},
-	{NULL, false, false},
-	{NULL, false, false}
-};
+} g_threads;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -731,14 +722,15 @@ int main(int argc, char ** argv)
 		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
 	);
 
-	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
-	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
-	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
-	pthread_create(&g_threads.e131_server_thread, NULL, e131_server_thread, NULL);
+	bzero(&g_threads, sizeof(g_threads));
+	pthread_create(&g_threads.render_thread.handle, NULL, render_thread, NULL);
+	pthread_create(&g_threads.udp_server_thread.handle, NULL, udp_server_thread, NULL);
+	pthread_create(&g_threads.tcp_server_thread.handle, NULL, tcp_server_thread, NULL);
+	pthread_create(&g_threads.e131_server_thread.handle, NULL, e131_server_thread, NULL);
 
 	if (g_server_config.demo_mode != DEMO_MODE_NONE) {
 		printf("[main] Demo Mode Enabled\n");
-		pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
+		pthread_create(&g_threads.demo_thread.handle, NULL, demo_thread, NULL);
 	} else {
 		printf("[main] Demo Mode Disabled\n");
 	}
@@ -1025,75 +1017,75 @@ int server_config_from_json(
 
 	// Search for parameter "bar" and print it's value
 	if ((token = find_json_token(json_tokens, "outputMode"))) {
-		strlcpy(output_config->output_mode_name, token->ptr, mint(int32_t, sizeof(g_server_config.output_mode_name), token->len + 1));
+		strlcpy(output_config->output_mode_name, token->ptr, min((int)sizeof(g_server_config.output_mode_name), token->len + 1));
 	}
 
 	if ((token = find_json_token(json_tokens, "outputMapping"))) {
-		strlcpy(output_config->output_mapping_name, token->ptr, mint(int32_t, sizeof(g_server_config.output_mode_name), token->len + 1));
+		strlcpy(output_config->output_mapping_name, token->ptr, min(sizeof(g_server_config.output_mode_name), token->len + 1));
 	}
 
 	if ((token = find_json_token(json_tokens, "demoMode"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->demo_mode = demo_mode_from_string(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "ledsPerStrip"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->leds_per_strip = (uint32_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "usedStripCount"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->used_strip_count = (uint32_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "colorChannelOrder"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->color_channel_order = color_channel_order_from_string(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "opcTcpPort"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->tcp_port = (uint16_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "opcUdpPort"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->udp_port = (uint16_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "enableInterpolation"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->interpolation_enabled = strcasecmp(token_value, "true") == 0 ? TRUE : FALSE;
 	}
 
 	if ((token = find_json_token(json_tokens, "enableDithering"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->dithering_enabled = strcasecmp(token_value, "true") == 0 ? TRUE : FALSE;
 	}
 
 	if ((token = find_json_token(json_tokens, "enableLookupTable"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->lut_enabled = strcasecmp(token_value, "true") == 0 ? TRUE : FALSE;
 	}
 
 	if ((token = find_json_token(json_tokens, "lumCurvePower"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->lum_power = atof(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "whitePoint.red"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->white_point.red = atof(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "whitePoint.green"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->white_point.green = atof(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "whitePoint.blue"))) {
-		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, min(sizeof(token_value), token->len + 1));
 		output_config->white_point.blue = atof(token_value);
 	}
 
@@ -1200,7 +1192,7 @@ void ensure_frame_data() {
 
 	pthread_mutex_lock(&g_runtime_state.mutex);
 	if (g_runtime_state.frame_size != led_count) {
-		fprintf(stderr, "Allocating buffers for %d pixels (%lu bytes)\n", led_count, led_count * 3 /*channels*/ * 4 /*buffers*/ * sizeof(uint16_t));
+		fprintf(stderr, "Allocating buffers for %d pixels (%ju bytes)\n", led_count, (uintmax_t)(led_count * 3 /*channels*/ * 4 /*buffers*/ * sizeof(uint16_t)));
 
 		if (g_runtime_state.previous_frame_data != NULL) {
 			free(g_runtime_state.previous_frame_data);
@@ -1325,7 +1317,7 @@ void* render_thread(void* unused_data)
 
 	// Timing Variables
 	struct timeval frame_progress_tv, now_tv;
-	uint16_t frame_progress16, inv_frame_progress16;
+	uint16_t frame_progress16 = 0, inv_frame_progress16 = 0;
 
 	const unsigned fps_report_interval_seconds = 10;
 	uint64_t last_report = 0;
@@ -1878,11 +1870,11 @@ void* e131_server_thread(void* unused_data)
 	if (sock < 0)
 		die("[e131] socket failed: %s\n", strerror(errno));
 
-	struct sockaddr_in6 addr = {
-		.sin6_family = AF_INET6,
-		.sin6_addr = in6addr_any,
-		.sin6_port = htons(g_server_config.e131_port),
-	};
+	struct sockaddr_in6 addr;
+	bzero(&addr, sizeof(addr));
+	addr.sin6_family = AF_INET6;
+	addr.sin6_addr = in6addr_any;
+	addr.sin6_port = htons(g_server_config.e131_port);
 
 	if (bind(sock, (const struct sockaddr*) &addr, sizeof(addr)) < 0) {
 		fprintf(stderr, "[e131] bind port %d failed: %s\n", g_server_config.e131_port, strerror(errno));
@@ -1946,7 +1938,7 @@ void* e131_server_thread(void* unused_data)
 					memcpy(
 						dmx_buffer + ledscape_channel_num * leds_per_strip * sizeof(buffer_pixel_t),
 						packet_buffer + 126,
-						min(received_packet_size - 126, led_count * sizeof(buffer_pixel_t))
+						min((uint)(received_packet_size - 126), led_count * sizeof(buffer_pixel_t))
 					);
 
 					set_next_frame_data(
@@ -2019,11 +2011,11 @@ void* udp_server_thread(void* unused_data)
 	if (sock < 0)
 		die("[udp] socket failed: %s\n", strerror(errno));
 
-	struct sockaddr_in6 addr = {
-		.sin6_family = AF_INET6,
-		.sin6_addr = in6addr_any,
-		.sin6_port = htons(g_server_config.udp_port),
-	};
+	struct sockaddr_in6 addr;
+	bzero(&addr, sizeof(addr));
+	addr.sin6_family = AF_INET6;
+	addr.sin6_addr = in6addr_any;
+	addr.sin6_port = htons(g_server_config.udp_port);
 
 	if (bind(sock, (const struct sockaddr*) &addr, sizeof(addr)) < 0)
 		die("[udp] bind port %d failed: %s\n", g_server_config.udp_port, strerror(errno));
@@ -2037,14 +2029,14 @@ void* udp_server_thread(void* unused_data)
 		}
 
 		// Enough data for an OPC command header?
-		if (rc >= sizeof(opc_cmd_t)) {
+		if (rc >= (int)sizeof(opc_cmd_t)) {
 			opc_cmd_t* cmd = (opc_cmd_t*) buf;
 			const size_t cmd_len = cmd->len_hi << 8 | cmd->len_lo;
 
 			uint8_t* opc_cmd_payload = ((uint8_t*)buf) + sizeof(opc_cmd_t);
 
 			// Enough data for the entire command?
-			if (rc >= sizeof(opc_cmd_t) + cmd_len) {
+			if (rc >= (int)(sizeof(opc_cmd_t) + cmd_len)) {
 				if (cmd->command == 0) {
 					set_next_frame_data(opc_cmd_payload, cmd_len, TRUE);
 				} else if (cmd->command == 255) {
@@ -2074,7 +2066,7 @@ void* udp_server_thread(void* unused_data)
 // TCP Server
 static void event_handler(struct ns_connection *conn, enum ns_event ev, void *event_param) {
 	struct iobuf *io = &conn->recv_iobuf; // IO buffer that holds received message
-
+	(void)(event_param);
 	switch (ev) {
 		case NS_RECV: {
 			// Enough data for an OPC command header?
