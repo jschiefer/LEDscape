@@ -267,7 +267,7 @@ ip address after starting `opc-server` or installing the system service.
 Hardware Tips
 ========
 
-Remember that the BBB outputs data at 3.3v. Depending on the specific LED strips, it is often possible to connect the `DI` on directly to one of the output pins on the BeagleBone, especially if the strips are high quality and the connecting wire is short. Many [recommend](https://forum.pjrc.com/threads/24648-Newbie-findings-re-WS281X-signal-quality(wire-length-resistors-and-grounds-Oh-my!) also adding an impedance  matching resistor to smooth out the signal. 
+Remember that the BBB outputs data at 3.3v. Depending on the specific LED strips, it is often possible to connect the `DI` on directly to one of the output pins on the BeagleBone, especially if the strips are high quality and the connecting wire is short. Many [recommend](https%3A%2F%2Fforum.pjrc.com%2Fthreads%2F24648-Newbie-findings-re-WS281X-signal-quality%28wire-length-resistors-and-grounds-Oh-my%21%29) also adding an impedance  matching resistor to smooth out the signal. 
 
 If your strips require 5V on `DI`, you will need to use a level-shifter of some sort. [Adafruit](http://www.adafruit.com/products/757) has a decent one which works well.  For custom circuit boards we recommend the [TI SN74LV245](http://octopart.com/partsearch#!?q=SN74LV245).
 
