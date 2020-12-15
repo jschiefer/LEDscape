@@ -65,7 +65,7 @@ typedef enum {
 	DEMO_MODE_FADE = 1,
 	DEMO_MODE_IDENTIFY = 2,
 	DEMO_MODE_BLACK = 3,
-    DEMO_MODE_POWER = 4,
+    DEMO_MODE_POWER = 4 ,
 	DEMO_MODE_REDBEAT = 5
 } demo_mode_t;
 
@@ -143,7 +143,6 @@ const char* demo_mode_to_string(demo_mode_t mode) {
 		case DEMO_MODE_BLACK: return "black";
 		case DEMO_MODE_POWER: return "power";        
 		case DEMO_MODE_REDBEAT: return "redbeat";        
-
 		default: return "<invalid demo_mode>";
 	}
 }
@@ -159,9 +158,11 @@ demo_mode_t demo_mode_from_string(const char* str) {
 		return DEMO_MODE_BLACK;
 	} else if (strcasecmp(str, "power") == 0) {
     	return DEMO_MODE_POWER;
-	} else {        
-		return -1;
-	}
+	} else if (strcasecmp(str, "redbeat") == 0) {
+    	return DEMO_MODE_REDBEAT;
+	} 
+	       
+	return -1;	
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -640,13 +641,12 @@ void handle_args(int argc, char ** argv) {
 							case 'd': printf("Alternative to --count; specifies pixel count as a dimension, e.g. 16x16 (256 pixels)"); break;
 							case 'D':
 								printf("Configures the idle (demo) mode which activates when no data arrives for more than 5 seconds. Modes:\n");
-						        printf("\t- none     Do nothing; leaving LED colors as they were\n");
-						        printf("\t- black    Turn off all LEDs");
-						        printf("\t- fade     Display a rainbow fade across all LEDs\n");
-						        printf("\t- id       Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
+						        printf("\t- none   Do nothing; leaving LED colors as they were\n");
+						        printf("\t- black  Turn off all LEDs");
+						        printf("\t- fade   Display a rainbow fade across all LEDs\n");
+						        printf("\t- id     Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
 						        printf("\t- power    Turn on all LEDs (good for checking max power requirements)");
-						        printf("\t- redbeat  1 second red pulse every minute (good for indicating network error)");
-
+						        printf("\t- redbeat  1 second red pulse every minute (good for indicating network error)");								
 						        break;
 							case 'o':
 								printf("Specifies the color channel output order (RGB, RBG, GRB, GBR, BGR or BRG); default is BRG.");
@@ -1748,45 +1748,6 @@ void* demo_thread(void* unused_data)
 							);
 						} break;
 
-						case DEMO_MODE_REDBEAT: {
-
-							// pulse red for 1 second each minute
-
-							long            ms; // Milliseconds
-							time_t          s;  // Seconds
-							struct timespec spec;
-
-							clock_gettime(CLOCK_REALTIME, &spec);
-
-							s  = spec.tv_sec;
-							ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
-
-							uint8_t r = 0;
-
-							if ( s % 60 == 59 )  {		// Only show durring last second of each minute
-
-								// Ramp red linearly up durring 1st half of the second, down durring the 2nd
-
-								if (ms < 500) {
-
-									r = (ms * 255) / 500;
-
-								} else {	// 500 <= ms < 1000
-
-									r = (( 1000- ms ) * 255 )/ 500;
-
-								}
-							}
-
-							// All pixels on all strings same color 
-
-							buffer[data_index] = r;			// R
-							buffer[data_index+1] = 0 ;		// G
-							buffer[data_index+2] = 0;		// B
-
-						} break;
-
-
 						case DEMO_MODE_BLACK: {
 							buffer[data_index] = buffer[data_index+1] = buffer[data_index+2] = 0;
 						} break;
@@ -1794,7 +1755,38 @@ void* demo_thread(void* unused_data)
 						case DEMO_MODE_POWER: {
     						buffer[data_index] = buffer[data_index+1] = buffer[data_index+2] = 0xff;
 						} break;
-                        
+
+						case DEMO_MODE_REDBEAT: {
+
+							const uint8_t max_brightness = 128;	// How bright you like it
+
+							// pulse red for 1 second each minute
+							struct timeval time_now;
+							gettimeofday(&time_now,NULL);
+
+							uint8_t r = 0;
+
+							if ( time_now.tv_sec % 5 == 1 )  {		// Only show durring last second of each minute
+
+								// Ramp red linearly up durring 1st half of the second, down durring the 2nd
+
+								if (time_now.tv_usec < 500000U) {
+
+									r = (time_now.tv_usec * max_brightness ) / 500000U;
+
+								} else {	// 500 <= ms < 1000
+
+									r = (( 1000000U- time_now.tv_usec ) * max_brightness )/ 500000U;
+
+								}
+							}
+
+							buffer[data_index]   = r;		// R
+							buffer[data_index+1] = 0 ;		// G
+							buffer[data_index+2] = 0;		// B
+
+
+						} break;                        
 					}
 				}
 			}
@@ -1824,7 +1816,6 @@ int join_multicast_group_on_all_ifaces(
 
 	if ( getifaddrs(&addrs) < 0 ) {
 		// Error occurred
-
 		return -1;
 	}
 
