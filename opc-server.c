@@ -1766,7 +1766,7 @@ void* demo_thread(void* unused_data)
 
 							uint8_t r = 0;
 
-							if ( time_now.tv_sec % 5 == 1 )  {		// Only show durring last second of each minute
+							if ( time_now.tv_sec % 60 == 0 )  {		// Only show durring first second of each minute
 
 								// Ramp red linearly up durring 1st half of the second, down durring the 2nd
 
