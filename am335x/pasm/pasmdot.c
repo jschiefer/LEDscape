@@ -139,7 +139,7 @@ int CheckDotCommand( char *word )
 int DotCommand( SOURCEFILE *ps, int TermCnt, char **pTerms, char *Src, int MaxSrc )
 {
     int i;
-    (void)MaxSrc;
+
     for(i=0; i<=DOTCMD_MAX; i++)
     {
         if( !stricmp( pTerms[0], DotCmds[i] ) )
@@ -425,7 +425,6 @@ NO_MATCH:
 */
 void DotInitialize(int pass)
 {
-    (void)pass;
     StructInit();
 }
 
@@ -440,7 +439,6 @@ void DotInitialize(int pass)
 */
 void DotCleanup(int pass)
 {
-    (void)pass;
     StructCleanup();
     MacroCleanup();
 }
