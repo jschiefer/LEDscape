@@ -1766,7 +1766,8 @@ void* demo_thread(void* unused_data)
 
 							uint8_t r = 0;
 
-
+							if ( time_now.tv_sec % 60 == 0 )  {		// Only show durring first second of each minute
+							
 								// Ramp red linearly up durring 1st half of the second, down durring the 2nd
 
 								if (time_now.tv_usec < 500000U) {
@@ -1778,6 +1779,7 @@ void* demo_thread(void* unused_data)
 									r = (( 1000000U- time_now.tv_usec ) * max_brightness )/ 500000U;
 
 								}
+
 							}
 
 							buffer[data_index]   = r;		// R
