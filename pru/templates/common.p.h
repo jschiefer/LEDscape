@@ -55,6 +55,12 @@
 
 #define r_temp2 r28
 
+#define r_gpio_temp_addr r_gpio0_addr
+#define r_gpio_temp_mask r_gpio0_mask
+
+
+#define r_gpio
+
 // ***************************************
 // *      Global Macro definitions       *
 // ***************************************
@@ -189,11 +195,12 @@
  * with things that must happen on a tight schedule.
  */
 .macro SLEEPNS
-.mparam ns,inst,lab
-	MOV r_sleep_counter, (ns/10)-1-inst // ws2811 -- high speed
-lab:
+.mparam ns
+	MOV r_sleep_counter, (ns/10)-1 // ws2811 -- high speed
+	NOP
+l:
 	SUB r_sleep_counter, r_sleep_counter, 1
-	QBNE lab, r_sleep_counter, 0
+	QBNE l, r_sleep_counter, 0
 .endm
 
 
@@ -221,18 +228,19 @@ lab:
 .endm
 
 /** Reset the cycle counter */
+/* Clobbers r_temp_addr, r_temp2, and r9 */
 .macro RESET_COUNTER
 		// Disable the counter and clear it, then re-enable it
 		MOV r_temp_addr, PRU_CONTROL_ADDRESS // control register
-		LBBO r9, r_temp_addr, 0, 4
-		CLR r9, r9, 3 // disable counter bit
-		SBBO r9, r_temp_addr, 0, 4 // write it back
+		LBBO r_temp1, r_temp_addr, 0, 4
+		CLR r_temp1, r_temp1, 3 // disable counter bit
+		SBBO r_temp1, r_temp_addr, 0, 4 // write it back
 
 		MOV r_temp2, 0
 		SBBO r_temp2, r_temp_addr, 0xC, 4 // clear the timer
 
-		SET r9, r9, 3 // enable counter bit
-		SBBO r9, r_temp_addr, 0, 4 // write it back
+		SET r_temp1, r_temp1, 3 // enable counter bit
+		SBBO r_temp1, r_temp_addr, 0, 4 // write it back
 
 		// Read the current counter value
 		// Should be zero.
@@ -248,9 +256,67 @@ lab:
 	#endif
 .endm
 
+
+// Ugly Ugly defines so we can conat strings in macros. Ugly. 
+// How could we let something like this happen, people? 
+
+
+#define _IMPL_CONCAT2(a,b) a ## b
+#define CONCAT2(a,b) _IMPL_CONCAT2(a,b)
+
+#define _IMPL_CONCAT3(a,b,c) a ## b ## c
+#define CONCAT3(a,b,c) _IMPL_CONCAT3(a,b,c)
+
+#define _IMPL_CONCAT4(a,b,c,d) a ## b ## c ## d
+#define CONCAT4(a,b,c,d) _IMPL_CONCAT4(a,b,c,d)
+
+
 // ***************************************
 // *         LED Mapping Macros          *
 // ***************************************
+
+
+#define MAKE_GPIO_BANK_STRING( gpioNum , banktype )  r_gpio##gpioNum##_##banktype
+
+// Which set of gpio register bits (ones, zeros, mask) ? To which gpio bank (0-3)?
+
+.macro APPLY_GPIO_TO_ADDR
+	.mparam  banktype , gpioNum  
+	SBBO  CONCAT4( r_gpio , gpioNum , _ , banktype) , CONCAT3( r_gpio , gpioNum , _addr) , 0, 4;
+.endm
+
+//#define APPLY_GPIO_TO_ADDR( banktype , gpioNum ) SBBO MAKE_GPIO_BANK_STRING , CONCAT3( r_gpio , gpioNum , _addr) , 0, 4;
+
+// Load the address pointer to point to the address that clears the gpio pin when a 1 is written to it
+
+.macro PREP_GPIO_ADDR_FOR_CLEAR
+	.mparam  gpioNum 
+     	MOV r_gpio ## gpioNum ## _addr, GPIO ## gpioNum | GPIO_CLEARDATAOUT; 
+.endm
+
+//#define PREP_GPIO_ADDR_FOR_CLEAR( gpioNum )     	MOV r_gpio ## gpioNum ## _addr, GPIO0 | GPIO_CLEARDATAOUT; 
+
+// Load the address pointer to point to the address that sets the gpio pin when a 1 is written to it
+
+.macro PREP_GPIO_ADDR_FOR_SET
+	.mparam gpioNum        	
+	MOV CONCAT3( r_gpio , gpioNum , _addr), GPIO0 | GPIO_SETDATAOUT; 
+.endm
+
+
+// #define PREP_GPIO_ADDR_FOR_SET( gpioNum )       	MOV r_gpio ## gpioNum ## _addr, GPIO0 | GPIO_SETDATAOUT; 
+
+.macro PREP_A_GPIO_MASK_NAMED
+	.mparam  gpioNum , maskName
+	MOV r_gpio ## gpioNum ## _mask, GPIO_MASK( gpioNum , maskName); 
+.endm
+
+
+//#define PREP_A_GPIO_MASK_NAMED( gpioNum , maskName)	MOV r_gpio ## gpioNum ## _mask, GPIO_MASK( gpioNum , maskName); 
+
+
+// Defines below could be rewritten with general case above but I do nt want to mess with it since I only care about WS2128B 
+// and these below are no longer needed there. -josh
 
 #define PREP_GPIO_ADDRS_FOR_CLEAR()     MOV r_gpio0_addr, GPIO0 | GPIO_CLEARDATAOUT; \
                                         MOV r_gpio1_addr, GPIO1 | GPIO_CLEARDATAOUT; \
@@ -267,29 +333,23 @@ lab:
                                         MOV r_gpio2_mask, GPIO_MASK(2, maskName); \
                                         MOV r_gpio3_mask, GPIO_MASK(3, maskName);
 
-#define GPIO_APPLY_MASK_TO_ADDR()       SBBO r_gpio0_mask, r_gpio0_addr, 0, 4; \
-                                        SBBO r_gpio1_mask, r_gpio1_addr, 0, 4; \
-                                        SBBO r_gpio2_mask, r_gpio2_addr, 0, 4; \
-                                        SBBO r_gpio3_mask, r_gpio3_addr, 0, 4;
+#define GPIO_APPLY_MASK_TO_ADDR()       SBBO r_gpio2_mask, r_gpio2_addr, 0, 4; \
+					SBBO r_gpio1_mask, r_gpio1_addr, 0, 4; \
+					SBBO r_gpio3_mask, r_gpio3_addr, 0, 4; \
+					SBBO r_gpio0_mask, r_gpio0_addr, 0, 4; 
+
+
+#define GPIO_APPLY_ONES_TO_ADDR()       SBBO r_gpio2_ones, r_gpio2_addr, 0, 4; \
+					SBBO r_gpio1_ones, r_gpio1_addr, 0, 4; \
+					SBBO r_gpio3_ones, r_gpio3_addr, 0, 4; \
+					SBBO r_gpio0_ones, r_gpio0_addr, 0, 4;
+
                                         
-#define GPIO_APPLY_ZEROS_TO_ADDR()      SBBO r_gpio0_zeros, r_gpio0_addr, 0, 4; \
-                                        SBBO r_gpio1_zeros, r_gpio1_addr, 0, 4; \
-                                        SBBO r_gpio2_zeros, r_gpio2_addr, 0, 4; \
-                                        SBBO r_gpio3_zeros, r_gpio3_addr, 0, 4;
+#define GPIO_APPLY_ZEROS_TO_ADDR()      SBBO r_gpio2_zeros, r_gpio2_addr, 0, 4; \
+					SBBO r_gpio1_zeros, r_gpio1_addr, 0, 4; \
+					SBBO r_gpio3_zeros, r_gpio3_addr, 0, 4; \
+					SBBO r_gpio0_zeros, r_gpio0_addr, 0, 4;
                                         
-#define GPIO_APPLY_ONES_TO_ADDR()       SBBO r_gpio0_ones, r_gpio0_addr, 0, 4; \
-                                        SBBO r_gpio1_ones, r_gpio1_addr, 0, 4; \
-                                        SBBO r_gpio2_ones, r_gpio2_addr, 0, 4; \
-                                        SBBO r_gpio3_ones, r_gpio3_addr, 0, 4;
-
-#define _IMPL_CONCAT2(a,b) a ## b
-#define CONCAT2(a,b) _IMPL_CONCAT2(a,b)
-
-#define _IMPL_CONCAT3(a,b,c) a ## b ## c
-#define CONCAT3(a,b,c) _IMPL_CONCAT3(a,b,c)
-
-#define _IMPL_CONCAT4(a,b,c,d) a ## b ## c ## d
-#define CONCAT4(a,b,c,d) _IMPL_CONCAT4(a,b,c,d)
 
 #define PRU_CONSTANT(name) CONCAT4(pru, PRU_NUM, _, name)
 
@@ -321,9 +381,16 @@ lab:
  * @param regN The data register to check. Generally one of the r_dataN registers.
  * @param channelIndex Which channel this check is for. Used to determine GPIO bank and bit.
  */
+/*
 #define TEST_BIT_ZERO(regN,channelIndex) QBBS CONCAT3(channel_,channelIndex,_zero_skip), regN, r_bit_num; \
                                         SET CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_zeros), CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_zeros), CHANNEL_BIT(channelIndex); \
                                         CONCAT3(channel_,channelIndex,_zero_skip): ;
+*/
+
+#define TEST_BIT_ZERO(regN,channelIndex) QBBS CONCAT3(channel_,channelIndex,_zero_skip), regN, r_bit_num; \
+                                        SET CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_zeros), CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_zeros), CHANNEL_BIT(channelIndex); \
+                                        CONCAT3(channel_,channelIndex,_zero_skip): ;
+
 
 /**
  * Checks if the bit indexed by the r_bit_num register in the regN register is a one, and if so, sets the bit in the
@@ -355,8 +422,9 @@ lab:
 #define GPIO3 0x481AE000
 
 /** Offsets for the clear and set registers in the devices */
-#define GPIO_CLEARDATAOUT 0x190
-#define GPIO_SETDATAOUT 0x194
+#define GPIO_DATAIN 		0x138		// Read level of pins
+#define GPIO_CLEARDATAOUT 	0x190		 
+#define GPIO_SETDATAOUT 	0x194		
 
 #define NOP       mov r0, r0
 

@@ -4,7 +4,7 @@ LEDscape is a library and service for controlling individually addressable LEDs 
 Beagle Bone Black or Beagle Bone Green using the onboard [PRUs](http://processors.wiki.ti.com/index.php/Programmable_Realtime_Unit_Subsystem). It currently supports WS281x 
 (WS2811, WS2812, WS2812b), WS2801 and initial support for DMX. 
 
-It can support up to 48 connected strings and can drive them with very little load on the main processor. 
+This version of LEDscape uses gpio pins so it can support up to 48 connected strings of practically unlimited length and can drive them with very little load on the main processor. 
 
 Background
 ------
@@ -12,9 +12,9 @@ LEDscape was originally written by Trammell Hudson (http://trmm.net/Category:LED
 controlling WS2811-based LEDs. Since his original work, his version (https://github.com/osresearch/LEDscape)
 has been repurposed to drive a different type of LED panel (e.g. http://www.adafruit.com/products/420).
 
-This version of the library was forked from his original WS2811 work. Various improvements have been made in the 
-attempt to make an accessible and powerful LED driver based on the BBB. Many thanks to Trammell for his excellent work
-in scaffolding the BBB and PRUs for driving LEDs.
+This version uses  GPIO pins rather than PRU pins enable it to drive up to 48 LED strings independently (with up to 66 possible with some software changes). Various improvements have been made in the attempt to make an accessible and powerful LED driver based on the BBB. 
+
+Many thanks to Trammell for his excellent work in scaffolding the BBB and PRUs for driving LEDs.
 
 
 Installation
@@ -23,21 +23,21 @@ It is necessary to have access to a shell onto the Beaglebone using serial, Ethe
 Examples on how to do this can be found at [BeagleBoard.org](http://beagleboard.org/getting-started) or at
 [Adafruit's Learning Site](https://learn.adafruit.com/ssh-to-beaglebone-black-over-usb/ssh-on-mac-and-linux).
 
-###Start with a compatible Linux image
+### Start with a compatible Linux image
 
 To use LEDscape, you must use a version of the Linux kernel that supports the `uio_pruss` module. The Beaglebone.org Wheezy Linux images work well. 
 
-####Checking existing Linux version
+#### Checking existing Linux version
 
-Check which Debian version you are currently running by entering...
+Check which Linux version you are currently running by entering...
 
 ```
-cat /etc/debian_version
+cat /proc/version
 ```
 
-This `README` was tested with version `7.11`, but any 7.x version should work. Version 8.x is currently not compatible because it does not support the PRUSS subsystem that LEDScape used to talk to the PRU units. 
+If you see something with `(Debian 4.x.x-xx)` (where the x's are numbers), then you should be ok with the installed image.
 
-####Installing a compatible Linux version
+#### Installing a compatible Linux version
 
 If you have an incompatible version currently installed or just want to start with a clean install of to the most recent compatible version, you can follow the instructions here under "Update board with latest software"...
 
@@ -45,11 +45,11 @@ http://beagleboard.org/getting-started
 
 Make sure you pick a "Wheezy" version of the Linux kernel since the "Jessie" versions do not yet work by default. This readme was tested against the "Debian 7.11 2015-06-15 4GB SD LXDE" image. 
 
-###Installing the LEDscape software
+### Installing the LEDscape software
 
 Log into a compatible Linux version as root and enter the following commands at a command line...
 
-	git clone git://github.com/Yona-Appletree/LEDscape
+	git clone git://github.com/bigjosh/LEDscape
 	cd LEDscape
 	chmod +x install-software.sh
 	./install-software.sh
@@ -60,20 +60,18 @@ This will do the following....
 1. Clone the LEDscape repository to your local machine in a directory called "LEDscape" under whatever directory you started in.
 3. Make the install script executable.
 2. Build the LEDscape software from the sources. This takes a couple of minutes and you will see lots of scrolling. 
-3. Copy the new flattened device tree files to your `/boot` directory. These files enable the PRU subsystem.  Note that the old files are backed up with the extension `preledscape_bk`.
+3. Copy the new flattened device tree files to your `/boot` directory. These files enable the PRU subsystem and disables the HDMI on the BeagleBone Black (BeagleBone Green does not have HDMI).  Note that the old files are backed up with the extension `preledscape_bk`.
 4. Copy a default config file to `/etc/ledscape-config.json` if that file does not already exist. 
 4. Install the `uio_pruss` kernel module to let LEDscape talk to the PRU subsystem. 
-5. Reboot the machine.
+5. Reboots the machine.
 
-###Updating an existing install
-
-If you are using an older version of LEDscape that keeps the configuration in a JSON file inside the LEDscape directory, you should copy your modified config to `/etc/ledscape-config.json`.  
+### Updating an existing install
 
 You should be able to update an existing install with the above procedure without overwriting your configuration in `/etc/ledscape-config.json`. 
 
 Note that the install process will not preserve any modified pin mappings.
  
-###Testing the install
+### Testing the install
 
 Once the machine has rebooted, log in as root, enter the following commands to switch into the `LEDscape` directory you created above and manually start the LEDscape server...
 
@@ -95,14 +93,14 @@ If you want LEDscape to automatically start every time the machine is rebooted, 
 Open Pixel Control Server
 =========================
 
-##Configuration
+## Configuration
 	
 By default LEDscape is configured for strings of 256 WS2811 pixels, accepting OPC
 data on port 7890. You can adjust this by editing `run-ledscape` and 
 editing the parameters to `opc-server`
 
 
-##Data Format
+## Data Format
 
 The `opc-server` server accepts data on OPC channel 0. It expects the data for
 each LED strip concatenated together. This is done because LEDscape requires
@@ -115,7 +113,7 @@ with `--udp-port <port>`. Entering `0` for a port number will disable that serve
 Note that if using the UDP server, `opc-server` will limit the number of pixels to 21835, or 454 pixels per port if
 using all 48 ports.
 
-##Output Modes
+## Output Modes
 
 LEDscape is capable of outputting several types of signal. By default, a ws2811-compatible signal is generated. The
 output mode can be specified with the `--mode <mode-id>` parameter. A list of available modes and their descriptions
@@ -141,9 +139,9 @@ A human-readable pinout for a mapping can be generated by running
 
     node pru/pinmap.js --mapping <mapping-id>
     
-###Default pin mappings
+### Default pin mappings
 
-By default, LEDscape is set up to drive 48 strings of WS2812B LEDs, with each string having up to 600 pixels. You can connect shorter strings with no problems except that the update rate will be slower. If you connect longer strings, only the first 600 pixels will update. 
+By default, LEDscape is set up to drive 48 strings of WS2812B LEDs, with each string having up to 600 pixels. You can connect shorter strings with no problems except that the update rate will be slower. If you connect longer strings, only the first 600 pixels will update until you increase `ledsPerStrip` in the config file. 
 
 Here is the default mapping of channels (in green) to pins...
 
@@ -156,7 +154,7 @@ Here are the default pin assignments for the first 6 channels so you can get you
 
 These are the pins you would connect the to each string's `DI` (Data In).
 
-###HDMI conflict
+### HDMI conflict
 
 #### BeagleBone Green
 The BeagleBone Green has no HDMI port, so all 48 channels are available on the mapped pins by default. 
@@ -225,6 +223,8 @@ The demo mode is set using the `demoMode` parameter and can have the following v
 |fade      | Display a pleasing pattern of rotating color hues with a border that steps across the pixels every 12 seconds |
 |black     | All pixels off|
 |power     | All pixels on full white (based on current settings)- good for testing for maximum power requirements for current settings |
+|redbeat   | All pixels pulse red for 1 second each minute. - good for indicating no OPC packets being received |
+
 
 The default `demo-mode` set in the supplied `ws281x-config.json` configuration file is `fade`.
 
@@ -235,13 +235,13 @@ Configuration
 
 Config info is typically stored in `/etc/ledscape-config.json`.
 
-##Default config
+## Default config
 
 The default config after installation is set up to drive WS281X strips connected to all of the 48 available output pins. Note that not all pins will work on BeagleBone Black unless you [disable the HDMI port](#HDMI Conflict).  
 
 A description of the file format and some example configurations are available in the [`configs/` subdirectory](/configs) of this repo. 
 
-##Directly editing the current config
+## Directly editing the current config
 
 You can edit the config file directly by typing...
 
@@ -267,13 +267,25 @@ ip address after starting `opc-server` or installing the system service.
 Hardware Tips
 ========
 
-Remember that the BBB outputs data at 3.3v. Depending on the specific LED strips, it is often possible to connect the `DI` on directly to one of the output pins on the BeagleBone, especially if the strips are high quality and the connecting wire is short. Many [recommend](https://forum.pjrc.com/threads/24648-Newbie-findings-re-WS281X-signal-quality(wire-length-resistors-and-grounds-Oh-my!) also adding an impedance  matching resistor to smooth out the signal. 
+Remember that the BBB outputs data at 3.3v. Depending on the specific LED strips, it is often possible to connect the `DI` on directly to one of the output pins on the BeagleBone, especially if the strips are high quality and the connecting wire is short. Many [recommend](https%3A%2F%2Fforum.pjrc.com%2Fthreads%2F24648-Newbie-findings-re-WS281X-signal-quality%28wire-length-resistors-and-grounds-Oh-my%21%29) also adding an impedance  matching resistor to smooth out the signal. 
 
 If your strips require 5V on `DI`, you will need to use a level-shifter of some sort. [Adafruit](http://www.adafruit.com/products/757) has a decent one which works well.  For custom circuit boards we recommend the [TI SN74LV245](http://octopart.com/partsearch#!?q=SN74LV245).
 
 While there may be others, RGB123 makes an excellent 24/48 pin cape designed 
 specifically for this version of LEDscape: [24 pin](http://rgb-123.com/product/beaglebone-black-24-output-cape/) or [48 pin](http://rgb-123.com/product/beaglebone-black-48-output-cape/)
 
+
+Eliminating [The White Flash Issue](https://github.com/Yona-Appletree/LEDscape/issues/49)
+=======
+Since this version of ledscape uses the GPIO pins, it is possible for other parts of the system to delay access to these pins at just the wrong moment and turn 0 bits into 1 bits as they are sent out to the LED strings. This can cause a visible flash on the LEDs. These flashes are typically rare, but can be noticeable especially when there is high system load. 
+
+It is possible to mitigate this issue by installing the `devmemkm` Loadable Kernel Module. If this module is available, `ledscape` will use it get higher priory access to the bus used for the GPIO pins. 
+
+To install `devmemkm`, follow the instructions here..
+
+https://github.com/bigjosh/devmemkm
+
+Once `devmemkm` is installed, restart `ledscape` and it will use `devmemkm` module to configure the PRU priority if it is available. 
 
 API
 ===
