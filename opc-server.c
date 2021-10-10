@@ -193,7 +193,7 @@ const char* opc_server_strerr(
 	}
 }
 
-inline int opc_server_set_error(
+inline __attribute__ ((__always_inline__)) int opc_server_set_error(
 	opc_error_code_t error_code,
 	const char* extra_info,
 	...
@@ -866,7 +866,7 @@ int validate_server_config(
 
 	int error_count = 0;
 
-	inline void result_append(const char *format, ...) {
+	inline __attribute__ ((__always_inline__)) void result_append(const char *format, ...) {
 		snprintf(
 			result_json_buffer + strlen(result_json_buffer),
 			result_json_buffer_size - strlen(result_json_buffer) + 1,
@@ -875,7 +875,7 @@ int validate_server_config(
 		);
 	}
 
-	inline void add_error(const char *format, ...) {
+	inline void __attribute__ ((__always_inline__)) add_error(const char *format, ...) {
 		// Can't call result_append here because it breaks gcc:
 		// internal compiler error: in initialize_inlined_parameters, at tree-inline.c:2795
 		snprintf(
