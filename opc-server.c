@@ -1307,7 +1307,7 @@ void rotate_frames(uint8_t lock_frame_data) {
 	if (lock_frame_data) pthread_mutex_unlock(&g_runtime_state.mutex);
 }
 
-inline uint32_t lutInterpolate(uint32_t value, uint32_t* lut) {
+uint32_t lutInterpolate(uint32_t value, uint32_t* lut) {
 	// Inspired by FadeCandy: https://github.com/scanlime/fadecandy/blob/master/firmware/fc_pixel_lut.cpp
 
 	uint32_t index = value >> 8; // Range [0, 0xFF]
